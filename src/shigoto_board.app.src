@@ -1,0 +1,10 @@
+{application, shigoto_board, [
+    {description, "Live dashboard for Shigoto background job system"},
+    {vsn, "git"},
+    {registered, []},
+    {applications, [kernel, stdlib, nova, arizona_core, arizona_nova, shigoto]},
+    {env, []},
+    {modules, []},
+    {licenses, ["MIT"]},
+    {links, [{"GitHub", "https://github.com/Taure/shigoto_board"}]}
+]}.

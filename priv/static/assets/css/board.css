@@ -1,0 +1,48 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1117; color: #e1e4e8; }
+
+.board-nav { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.5rem; background: #161b22; border-bottom: 1px solid #30363d; }
+.board-logo { font-size: 1.1rem; font-weight: 700; color: #58a6ff; }
+.board-links { display: flex; gap: 0.25rem; }
+.board-link { padding: 0.4rem 0.8rem; border-radius: 6px; color: #8b949e; text-decoration: none; font-size: 0.85rem; transition: background 0.15s; }
+.board-link:hover { background: #21262d; color: #e1e4e8; }
+.board-link.active { background: #1f6feb33; color: #58a6ff; }
+
+.board-main { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+h2 { font-size: 1.2rem; margin-bottom: 1rem; color: #c9d1d9; }
+
+.board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.25rem; text-align: center; }
+.stat-value { font-size: 2rem; font-weight: 700; }
+.stat-label { font-size: 0.8rem; color: #8b949e; margin-top: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-available .stat-value { color: #3fb950; }
+.stat-executing .stat-value { color: #58a6ff; }
+.stat-retryable .stat-value { color: #d29922; }
+.stat-completed .stat-value { color: #8b949e; }
+.stat-discarded .stat-value { color: #f85149; }
+.stat-stale .stat-value { color: #f0883e; }
+
+.board-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.board-table th { text-align: left; padding: 0.6rem 0.8rem; color: #8b949e; border-bottom: 1px solid #30363d; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+.board-table td { padding: 0.6rem 0.8rem; border-bottom: 1px solid #21262d; }
+.board-table tr:hover td { background: #161b22; }
+.mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 0.8rem; }
+
+.state-badge { padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+.state-available { background: #238636; color: #fff; }
+.state-executing { background: #1f6feb; color: #fff; }
+.state-retryable { background: #9e6a03; color: #fff; }
+.state-completed { background: #30363d; color: #8b949e; }
+.state-discarded { background: #da3633; color: #fff; }
+.state-cancelled { background: #484f58; color: #c9d1d9; }
+
+.board-filters { display: flex; gap: 0.25rem; margin-bottom: 1rem; }
+.btn { padding: 0.4rem 0.8rem; border: 1px solid #30363d; border-radius: 6px; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 0.8rem; }
+.btn:hover { background: #30363d; }
+.btn-active { background: #1f6feb33; color: #58a6ff; border-color: #1f6feb; }
+
+button { padding: 0.3rem 0.6rem; border: 1px solid #30363d; border-radius: 4px; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 0.75rem; }
+button:hover { background: #30363d; }
+
+.error-text { color: #f85149; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
