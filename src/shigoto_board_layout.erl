@@ -15,8 +15,12 @@ render(Bindings) ->
         <<"<!DOCTYPE html><html lang=\"en\"><head>">>,
         <<"<meta charset=\"utf-8\">">>,
         <<"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">">>,
-        <<"<title>">>, Title, <<"</title>">>,
-        <<"<link rel=\"stylesheet\" href=\"">>, Prefix, <<"/assets/css/board.css\">">>,
+        <<"<title>">>,
+        Title,
+        <<"</title>">>,
+        <<"<link rel=\"stylesheet\" href=\"">>,
+        Prefix,
+        <<"/assets/css/board.css\">">>,
         <<"</head><body>">>,
         <<"<nav class=\"board-nav\">">>,
         <<"<span class=\"board-logo\">&#x4ED5;&#x4E8B; Shigoto Board</span>">>,
@@ -31,8 +35,12 @@ render(Bindings) ->
         <<"<main class=\"board-main\">">>,
         Inner,
         <<"</main>">>,
-        <<"<script src=\"">>, Prefix, <<"/assets/js/arizona.min.js\"></script>">>,
-        <<"<script>Arizona.connect(\"">>, Prefix, <<"/live\");</script>">>,
+        <<"<script src=\"">>,
+        Prefix,
+        <<"/assets/js/arizona.min.js\"></script>">>,
+        <<"<script>Arizona.connect(\"">>,
+        Prefix,
+        <<"/live\");</script>">>,
         <<"</body></html>">>
     ]).
 
@@ -41,16 +49,22 @@ render(Bindings) ->
 %%----------------------------------------------------------------------
 
 nav_link(Prefix, Page, Label, ActivePage) ->
-    Class = case Page of
-        ActivePage -> <<"board-link active">>;
-        _ -> <<"board-link">>
-    end,
-    Href = case Page of
-        <<"overview">> -> Prefix;
-        _ -> <<Prefix/binary, "/", Page/binary>>
-    end,
+    Class =
+        case Page of
+            ActivePage -> <<"board-link active">>;
+            _ -> <<"board-link">>
+        end,
+    Href =
+        case Page of
+            <<"overview">> -> Prefix;
+            _ -> <<Prefix/binary, "/", Page/binary>>
+        end,
     iolist_to_binary([
-        <<"<a href=\"">>, Href, <<"\" class=\"">>, Class, <<"\">">>,
+        <<"<a href=\"">>,
+        Href,
+        <<"\" class=\"">>,
+        Class,
+        <<"\">">>,
         Label,
         <<"</a>">>
     ]).

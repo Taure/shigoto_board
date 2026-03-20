@@ -69,16 +69,33 @@ failure_row(F) ->
     LastError = extract_last_error(maps:get(errors, F, <<"[]">>)),
     iolist_to_binary([
         <<"<tr>">>,
-        <<"<td>">>, IdBin, <<"</td>">>,
-        <<"<td class=\"mono\">">>, to_bin(maps:get(worker, F, <<>>)), <<"</td>">>,
-        <<"<td>">>, to_bin(maps:get(queue, F, <<>>)), <<"</td>">>,
-        <<"<td><span class=\"state-badge state-">>, State, <<"\">">>, State, <<"</span></td>">>,
-        <<"<td>">>, i2b(maps:get(attempt, F, 0)), <<"/">>, i2b(maps:get(max_attempts, F, 3)), <<"</td>">>,
-        <<"<td class=\"mono error-text\">">>, truncate(LastError, 80), <<"</td>">>,
+        <<"<td>">>,
+        IdBin,
+        <<"</td>">>,
+        <<"<td class=\"mono\">">>,
+        to_bin(maps:get(worker, F, <<>>)),
+        <<"</td>">>,
+        <<"<td>">>,
+        to_bin(maps:get(queue, F, <<>>)),
+        <<"</td>">>,
+        <<"<td><span class=\"state-badge state-">>,
+        State,
+        <<"\">">>,
+        State,
+        <<"</span></td>">>,
+        <<"<td>">>,
+        i2b(maps:get(attempt, F, 0)),
+        <<"/">>,
+        i2b(maps:get(max_attempts, F, 3)),
+        <<"</td>">>,
+        <<"<td class=\"mono error-text\">">>,
+        truncate(LastError, 80),
+        <<"</td>">>,
         <<"<td>">>,
         case State of
             <<"discarded">> ->
-                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary, "\">Retry</button>">>;
+                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary,
+                    "\">Retry</button>">>;
             _ ->
                 <<>>
         end,

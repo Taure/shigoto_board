@@ -85,9 +85,15 @@ get_stale_count() ->
 stat_card(Label, Value, Class) ->
     ValBin = integer_to_binary(Value),
     iolist_to_binary([
-        <<"<div class=\"stat-card ">>, Class, <<"\">">>,
-        <<"<div class=\"stat-value\">">>, ValBin, <<"</div>">>,
-        <<"<div class=\"stat-label\">">>, Label, <<"</div>">>,
+        <<"<div class=\"stat-card ">>,
+        Class,
+        <<"\">">>,
+        <<"<div class=\"stat-value\">">>,
+        ValBin,
+        <<"</div>">>,
+        <<"<div class=\"stat-label\">">>,
+        Label,
+        <<"</div>">>,
         <<"</div>">>
     ]).
 
@@ -95,12 +101,24 @@ queue_row(QueueMap) ->
     Queue = maps:get(queue, QueueMap, <<"unknown">>),
     iolist_to_binary([
         <<"<tr>">>,
-        <<"<td>">>, Queue, <<"</td>">>,
-        <<"<td>">>, i2b(maps:get(available, QueueMap, 0)), <<"</td>">>,
-        <<"<td>">>, i2b(maps:get(executing, QueueMap, 0)), <<"</td>">>,
-        <<"<td>">>, i2b(maps:get(retryable, QueueMap, 0)), <<"</td>">>,
-        <<"<td>">>, i2b(maps:get(completed, QueueMap, 0)), <<"</td>">>,
-        <<"<td>">>, i2b(maps:get(discarded, QueueMap, 0)), <<"</td>">>,
+        <<"<td>">>,
+        Queue,
+        <<"</td>">>,
+        <<"<td>">>,
+        i2b(maps:get(available, QueueMap, 0)),
+        <<"</td>">>,
+        <<"<td>">>,
+        i2b(maps:get(executing, QueueMap, 0)),
+        <<"</td>">>,
+        <<"<td>">>,
+        i2b(maps:get(retryable, QueueMap, 0)),
+        <<"</td>">>,
+        <<"<td>">>,
+        i2b(maps:get(completed, QueueMap, 0)),
+        <<"</td>">>,
+        <<"<td>">>,
+        i2b(maps:get(discarded, QueueMap, 0)),
+        <<"</td>">>,
         <<"</tr>">>
     ]).
 

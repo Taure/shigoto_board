@@ -10,10 +10,10 @@ Arizona LiveView bootstrapping.
 index(Req) ->
     Path = cowboy_req:path(Req),
     Page = page_from_path(Path),
-    View = resolve_view(Page),
-    ArizonaReq = arizona_nova:cowboy_req_to_arizona_req(Req),
-    {ok, Mounted} = arizona_view:call_mount_callback(View, undefined, ArizonaReq),
-    {ok, Html} = arizona_renderer:render_layout(Mounted),
+    ViewModule = resolve_view(Page),
+    ArizonaReq = arizona_cowboy_request:new(Req),
+    View = arizona_view:call_mount_callback(ViewModule, undefined, ArizonaReq),
+    {Html, _RenderView} = arizona_renderer:render_layout(View),
     {status, 200, #{<<"content-type">> => <<"text/html; charset=utf-8">>}, Html}.
 
 %%----------------------------------------------------------------------

@@ -56,19 +56,34 @@ batch_row(B) ->
     Total = maps:get(total_jobs, B, 0),
     Completed = maps:get(completed_jobs, B, 0),
     Discarded = maps:get(discarded_jobs, B, 0),
-    Pct = case Total of
-        0 -> 0;
-        _ -> ((Completed + Discarded) * 100) div Total
-    end,
+    Pct =
+        case Total of
+            0 -> 0;
+            _ -> ((Completed + Discarded) * 100) div Total
+        end,
     iolist_to_binary([
         <<"<tr>">>,
-        <<"<td>">>, integer_to_binary(Id), <<"</td>">>,
-        <<"<td class=\"mono\">">>, to_bin(maps:get(callback_worker, B, null)), <<"</td>">>,
-        <<"<td>">>, to_bin(maps:get(state, B, <<>>)), <<"</td>">>,
-        <<"<td>">>, integer_to_binary(Total), <<"</td>">>,
-        <<"<td>">>, integer_to_binary(Completed), <<"</td>">>,
-        <<"<td>">>, integer_to_binary(Discarded), <<"</td>">>,
-        <<"<td>">>, integer_to_binary(Pct), <<"%</td>">>,
+        <<"<td>">>,
+        integer_to_binary(Id),
+        <<"</td>">>,
+        <<"<td class=\"mono\">">>,
+        to_bin(maps:get(callback_worker, B, null)),
+        <<"</td>">>,
+        <<"<td>">>,
+        to_bin(maps:get(state, B, <<>>)),
+        <<"</td>">>,
+        <<"<td>">>,
+        integer_to_binary(Total),
+        <<"</td>">>,
+        <<"<td>">>,
+        integer_to_binary(Completed),
+        <<"</td>">>,
+        <<"<td>">>,
+        integer_to_binary(Discarded),
+        <<"</td>">>,
+        <<"<td>">>,
+        integer_to_binary(Pct),
+        <<"%</td>">>,
         <<"</tr>">>
     ]).
 
