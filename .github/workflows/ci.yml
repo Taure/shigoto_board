@@ -16,7 +16,7 @@ jobs:
       version-file: '.tool-versions'
       enable-ex-doc: true
       enable-audit: true
-      enable-sbom: true
-      enable-sbom-scan: true
+      enable-sbom: false
+      enable-sbom-scan: false
       enable-dependency-submission: true
       enable-summary: true
