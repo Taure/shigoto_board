@@ -46,10 +46,11 @@ render(Bindings) ->
 
 -doc false.
 handle_event(<<"filter">>, #{<<"state">> := State}, View) ->
-    Filters = case State of
-        <<"all">> -> #{};
-        S -> #{state => S}
-    end,
+    Filters =
+        case State of
+            <<"all">> -> #{};
+            S -> #{state => S}
+        end,
     Jobs = get_jobs(Filters),
     State0 = arizona_view:get_state(View),
     State1 = arizona_stateful:put_binding(jobs, Jobs, State0),
@@ -72,10 +73,11 @@ handle_event(_, _, View) ->
 handle_info(refresh, View) ->
     State0 = arizona_view:get_state(View),
     FilterState = arizona_stateful:get_binding(filter_state, State0),
-    Filters = case FilterState of
-        <<"all">> -> #{};
-        S -> #{state => S}
-    end,
+    Filters =
+        case FilterState of
+            <<"all">> -> #{};
+            S -> #{state => S}
+        end,
     State1 = arizona_stateful:put_binding(jobs, get_jobs(Filters), State0),
     erlang:send_after(5000, self(), refresh),
     {[], arizona_view:update_state(State1, View)}.
@@ -91,13 +93,17 @@ get_jobs(Filters) ->
     end.
 
 filter_button(State, Label, ActiveState) ->
-    Class = case State of
-        ActiveState -> <<"btn btn-active">>;
-        _ -> <<"btn">>
-    end,
+    Class =
+        case State of
+            ActiveState -> <<"btn btn-active">>;
+            _ -> <<"btn">>
+        end,
     iolist_to_binary([
-        <<"<button class=\"">>, Class,
-        <<"\" arizona-click=\"filter\" arizona-value-state=\"">>, State, <<"\">">>,
+        <<"<button class=\"">>,
+        Class,
+        <<"\" arizona-click=\"filter\" arizona-value-state=\"">>,
+        State,
+        <<"\">">>,
         Label,
         <<"</button> ">>
     ]).
@@ -108,21 +114,42 @@ job_row(J) ->
     State = maps:get(state, J, <<>>),
     iolist_to_binary([
         <<"<tr>">>,
-        <<"<td>">>, IdBin, <<"</td>">>,
-        <<"<td class=\"mono\">">>, to_bin(maps:get(worker, J, <<>>)), <<"</td>">>,
-        <<"<td>">>, to_bin(maps:get(queue, J, <<>>)), <<"</td>">>,
-        <<"<td><span class=\"state-badge state-">>, State, <<"\">">>, State, <<"</span></td>">>,
-        <<"<td>">>, i2b(maps:get(attempt, J, 0)), <<"/">>, i2b(maps:get(max_attempts, J, 3)), <<"</td>">>,
-        <<"<td>">>, i2b(maps:get(priority, J, 0)), <<"</td>">>,
-        <<"<td>">>, i2b(maps:get(progress, J, 0)), <<"%</td>">>,
+        <<"<td>">>,
+        IdBin,
+        <<"</td>">>,
+        <<"<td class=\"mono\">">>,
+        to_bin(maps:get(worker, J, <<>>)),
+        <<"</td>">>,
+        <<"<td>">>,
+        to_bin(maps:get(queue, J, <<>>)),
+        <<"</td>">>,
+        <<"<td><span class=\"state-badge state-">>,
+        State,
+        <<"\">">>,
+        State,
+        <<"</span></td>">>,
+        <<"<td>">>,
+        i2b(maps:get(attempt, J, 0)),
+        <<"/">>,
+        i2b(maps:get(max_attempts, J, 3)),
+        <<"</td>">>,
+        <<"<td>">>,
+        i2b(maps:get(priority, J, 0)),
+        <<"</td>">>,
+        <<"<td>">>,
+        i2b(maps:get(progress, J, 0)),
+        <<"%</td>">>,
         <<"<td>">>,
         case State of
             <<"discarded">> ->
-                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary, "\">Retry</button>">>;
+                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary,
+                    "\">Retry</button>">>;
             <<"cancelled">> ->
-                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary, "\">Retry</button>">>;
+                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary,
+                    "\">Retry</button>">>;
             <<"available">> ->
-                <<"<button arizona-click=\"cancel\" arizona-value-job_id=\"", IdBin/binary, "\">Cancel</button>">>;
+                <<"<button arizona-click=\"cancel\" arizona-value-job_id=\"", IdBin/binary,
+                    "\">Cancel</button>">>;
             _ ->
                 <<>>
         end,

@@ -1,6 +1,6 @@
 -module(shigoto_board_ws).
 -moduledoc """
-WebSocket handler wrapping Arizona Nova WebSocket for live views.
+WebSocket handler delegating to Arizona Nova WebSocket.
 """.
 
 -export([
@@ -21,40 +21,11 @@ websocket_init(State) ->
 
 -doc false.
 websocket_handle(Frame, State) ->
-    case arizona_nova_websocket:websocket_handle(Frame, State) of
-        {reply, Frames, NewState} when is_list(Frames) ->
-            case Frames of
-                [Single] -> {reply, Single, NewState};
-                [First | Rest] ->
-                    lists:foreach(
-                        fun(F) -> self() ! {pending_frame, F} end,
-                        Rest
-                    ),
-                    {reply, First, NewState}
-            end;
-        Other ->
-            Other
-    end.
+    arizona_nova_websocket:websocket_handle(Frame, State).
 
 -doc false.
-websocket_info({pending_frame, Frame}, State) ->
-    {reply, Frame, State};
 websocket_info(Msg, State) ->
-    case arizona_nova_websocket:websocket_info(Msg, State) of
-        {reply, Frames, NewState} when is_list(Frames) ->
-            case Frames of
-                [] -> {ok, NewState};
-                [Single] -> {reply, Single, NewState};
-                [First | Rest] ->
-                    lists:foreach(
-                        fun(F) -> self() ! {pending_frame, F} end,
-                        Rest
-                    ),
-                    {reply, First, NewState}
-            end;
-        Other ->
-            Other
-    end.
+    arizona_nova_websocket:websocket_info(Msg, State).
 
 -doc false.
 terminate(Reason, Req, State) ->
