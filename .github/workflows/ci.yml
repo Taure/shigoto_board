@@ -14,8 +14,4 @@ jobs:
       pull-requests: write
     with:
       version-file: '.tool-versions'
-      enable-ex-doc: true
-      enable-audit: true
-      enable-sbom: true
-      enable-dependency-submission: true
       enable-summary: true
