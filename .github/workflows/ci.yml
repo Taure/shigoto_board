@@ -1,22 +1,5 @@
 name: CI
 
-# CI is disabled until nova, arizona_core, and arizona_nova deps are publicly available.
-# Once available, enable the full erlang-ci workflow:
-#
-# jobs:
-#   ci:
-#     uses: Taure/erlang-ci/.github/workflows/ci.yml@v1
-#     permissions:
-#       contents: write
-#       pull-requests: write
-#     with:
-#       version-file: '.tool-versions'
-#       enable-ex-doc: true
-#       enable-audit: true
-#       enable-sbom: true
-#       enable-dependency-submission: true
-#       enable-summary: true
-
 on:
   push:
     branches: [main]
@@ -24,7 +7,16 @@ on:
     branches: [main]
 
 jobs:
-  placeholder:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "CI disabled until arizona deps are public"
+  ci:
+    uses: Taure/erlang-ci/.github/workflows/ci.yml@v1
+    permissions:
+      contents: write
+      pull-requests: write
+    with:
+      version-file: '.tool-versions'
+      enable-ex-doc: true
+      enable-audit: true
+      enable-sbom: true
+      enable-sbom-scan: true
+      enable-dependency-submission: true
+      enable-summary: true
