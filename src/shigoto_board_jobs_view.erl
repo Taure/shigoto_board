@@ -1,165 +1,111 @@
 -module(shigoto_board_jobs_view).
--moduledoc """
-Job search and inspector view with retry/cancel actions.
-""".
 -behaviour(arizona_view).
+-compile({parse_transform, arizona_parse_transform}).
 
 -export([mount/2, render/1, handle_event/3, handle_info/2]).
 
--doc false.
 mount(_Arg, _Req) ->
     case arizona_live:is_connected(self()) of
-        true -> erlang:send_after(5000, self(), refresh);
+        true -> erlang:send_after(3000, self(), refresh);
         false -> ok
     end,
-    {ok, #{
-        layout => fun shigoto_board_layout:render/1,
-        bindings => #{
-            title => <<"Jobs - Shigoto Board">>,
-            active_page => <<"jobs">>,
-            jobs => get_jobs(#{}),
-            filter_state => <<"all">>
-        }
-    }}.
+    {ok, Jobs} = shigoto_dashboard:recent_failures(20),
+    Prefix = shigoto_board:prefix(),
+    Bindings = #{id => ~"jobs_view", jobs => Jobs},
+    Layout = {shigoto_board_layout, render, main_content, #{
+        active_page => ~"jobs",
+        prefix => Prefix,
+        ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+        arizona_prefix => arizona_nova:prefix()
+    }},
+    arizona_view:new(?MODULE, Bindings, Layout).
 
--doc false.
 render(Bindings) ->
-    Jobs = maps:get(jobs, Bindings, []),
-    FilterState = maps:get(filter_state, Bindings, <<"all">>),
-    iolist_to_binary([
-        <<"<h2>Jobs</h2>">>,
-        <<"<div class=\"board-filters\">">>,
-        filter_button(<<"all">>, <<"All">>, FilterState),
-        filter_button(<<"available">>, <<"Available">>, FilterState),
-        filter_button(<<"executing">>, <<"Executing">>, FilterState),
-        filter_button(<<"retryable">>, <<"Retryable">>, FilterState),
-        filter_button(<<"discarded">>, <<"Discarded">>, FilterState),
-        filter_button(<<"cancelled">>, <<"Cancelled">>, FilterState),
-        <<"</div>">>,
-        <<"<table class=\"board-table\"><thead><tr>">>,
-        <<"<th>ID</th><th>Worker</th><th>Queue</th><th>State</th>">>,
-        <<"<th>Attempt</th><th>Priority</th><th>Progress</th><th>Actions</th>">>,
-        <<"</tr></thead><tbody>">>,
-        [job_row(J) || J <- Jobs],
-        <<"</tbody></table>">>
-    ]).
+    Jobs = arizona_template:get_binding(jobs, Bindings),
+    arizona_template:from_html(~"""
+    <div id="{arizona_template:get_binding(id, Bindings)}">
+        <p class="refresh-info">Auto-refreshes every 3s</p>
+        <div class="card">
+            <div class="card-title">
+                Recent Failures
+                <span class="badge badge-red">{integer_to_binary(length(Jobs))}</span>
+            </div>
+            <table>
+                <thead><tr>
+                    <th>ID</th>
+                    <th>Worker</th>
+                    <th>Queue</th>
+                    <th>State</th>
+                    <th class="text-right">Attempt</th>
+                    <th>Actions</th>
+                </tr></thead>
+                <tbody>
+                    {arizona_template:render_list(fun render_job_row/1, Jobs)}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """).
 
--doc false.
-handle_event(<<"filter">>, #{<<"state">> := State}, View) ->
-    Filters =
-        case State of
-            <<"all">> -> #{};
-            S -> #{state => S}
-        end,
-    Jobs = get_jobs(Filters),
-    State0 = arizona_view:get_state(View),
-    State1 = arizona_stateful:put_binding(jobs, Jobs, State0),
-    State2 = arizona_stateful:put_binding(filter_state, State, State1),
-    {[], arizona_view:update_state(State2, View)};
-handle_event(<<"retry">>, #{<<"job_id">> := JobIdBin}, View) ->
-    Pool = shigoto_config:pool(),
+handle_event(~"retry", #{~"job_id" := JobIdBin}, View) ->
+    logger:notice(#{msg => ~"Retrying job", job_id => JobIdBin}),
     JobId = binary_to_integer(JobIdBin),
-    _ = shigoto:retry(Pool, JobId),
-    {[], View};
-handle_event(<<"cancel">>, #{<<"job_id">> := JobIdBin}, View) ->
     Pool = shigoto_config:pool(),
+    shigoto:retry(Pool, JobId),
+    refresh_data(View);
+handle_event(~"cancel", #{~"job_id" := JobIdBin}, View) ->
+    logger:notice(#{msg => ~"Cancelling job", job_id => JobIdBin}),
     JobId = binary_to_integer(JobIdBin),
-    _ = shigoto:cancel(Pool, JobId),
-    {[], View};
-handle_event(_, _, View) ->
+    Pool = shigoto_config:pool(),
+    shigoto:cancel(Pool, JobId),
+    refresh_data(View);
+handle_event(_Event, _Params, View) ->
     {[], View}.
 
--doc false.
 handle_info(refresh, View) ->
-    State0 = arizona_view:get_state(View),
-    FilterState = arizona_stateful:get_binding(filter_state, State0),
-    Filters =
-        case FilterState of
-            <<"all">> -> #{};
-            S -> #{state => S}
-        end,
-    State1 = arizona_stateful:put_binding(jobs, get_jobs(Filters), State0),
-    erlang:send_after(5000, self(), refresh),
-    {[], arizona_view:update_state(State1, View)}.
+    erlang:send_after(3000, self(), refresh),
+    refresh_data(View).
+
+%%----------------------------------------------------------------------
+%% Row renderer
+%%----------------------------------------------------------------------
+
+render_job_row(Job) ->
+    IdBin = integer_to_binary(maps:get(id, Job)),
+    Worker = maps:get(worker, Job, ~"unknown"),
+    Queue = maps:get(queue, Job, ~"default"),
+    JobState = maps:get(state, Job, ~"unknown"),
+    Attempt = integer_to_binary(maps:get(attempt, Job, 0)),
+    RetryClick = <<"arizona.pushEventTo('jobs_view', 'retry', {job_id: '", IdBin/binary, "'})">>,
+    CancelClick = <<"arizona.pushEventTo('jobs_view', 'cancel', {job_id: '", IdBin/binary, "'})">>,
+    arizona_template:from_html(~"""
+    <tr>
+        <td class="mono">{IdBin}</td>
+        <td class="mono">{Worker}</td>
+        <td>{Queue}</td>
+        <td><span class="badge {state_badge(JobState)}">{JobState}</span></td>
+        <td class="text-right">{Attempt}</td>
+        <td>
+            <button class="btn btn-sm btn-green" onclick="{RetryClick}">Retry</button>
+            <button class="btn btn-sm btn-red" onclick="{CancelClick}">Cancel</button>
+        </td>
+    </tr>
+    """).
 
 %%----------------------------------------------------------------------
 %% Internal
 %%----------------------------------------------------------------------
 
-get_jobs(Filters) ->
-    case shigoto_dashboard:search_jobs(Filters#{limit => 100}) of
-        {ok, Jobs} -> Jobs;
-        _ -> []
-    end.
+refresh_data(View) ->
+    {ok, Jobs} = shigoto_dashboard:recent_failures(20),
+    State = arizona_view:get_state(View),
+    S1 = arizona_stateful:put_binding(jobs, Jobs, State),
+    {[], arizona_view:update_state(S1, View)}.
 
-filter_button(State, Label, ActiveState) ->
-    Class =
-        case State of
-            ActiveState -> <<"btn btn-active">>;
-            _ -> <<"btn">>
-        end,
-    iolist_to_binary([
-        <<"<button class=\"">>,
-        Class,
-        <<"\" arizona-click=\"filter\" arizona-value-state=\"">>,
-        State,
-        <<"\">">>,
-        Label,
-        <<"</button> ">>
-    ]).
-
-job_row(J) ->
-    Id = maps:get(id, J, 0),
-    IdBin = integer_to_binary(Id),
-    State = maps:get(state, J, <<>>),
-    iolist_to_binary([
-        <<"<tr>">>,
-        <<"<td>">>,
-        IdBin,
-        <<"</td>">>,
-        <<"<td class=\"mono\">">>,
-        to_bin(maps:get(worker, J, <<>>)),
-        <<"</td>">>,
-        <<"<td>">>,
-        to_bin(maps:get(queue, J, <<>>)),
-        <<"</td>">>,
-        <<"<td><span class=\"state-badge state-">>,
-        State,
-        <<"\">">>,
-        State,
-        <<"</span></td>">>,
-        <<"<td>">>,
-        i2b(maps:get(attempt, J, 0)),
-        <<"/">>,
-        i2b(maps:get(max_attempts, J, 3)),
-        <<"</td>">>,
-        <<"<td>">>,
-        i2b(maps:get(priority, J, 0)),
-        <<"</td>">>,
-        <<"<td>">>,
-        i2b(maps:get(progress, J, 0)),
-        <<"%</td>">>,
-        <<"<td>">>,
-        case State of
-            <<"discarded">> ->
-                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary,
-                    "\">Retry</button>">>;
-            <<"cancelled">> ->
-                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary,
-                    "\">Retry</button>">>;
-            <<"available">> ->
-                <<"<button arizona-click=\"cancel\" arizona-value-job_id=\"", IdBin/binary,
-                    "\">Cancel</button>">>;
-            _ ->
-                <<>>
-        end,
-        <<"</td>">>,
-        <<"</tr>">>
-    ]).
-
-to_bin(V) when is_binary(V) -> V;
-to_bin(V) when is_atom(V) -> atom_to_binary(V, utf8);
-to_bin(_) -> <<>>.
-
-i2b(V) when is_integer(V) -> integer_to_binary(V);
-i2b(_) -> <<"0">>.
+state_badge(~"completed") -> ~"badge-green";
+state_badge(~"executing") -> ~"badge-blue";
+state_badge(~"available") -> ~"badge-blue";
+state_badge(~"retryable") -> ~"badge-yellow";
+state_badge(~"discarded") -> ~"badge-red";
+state_badge(~"cancelled") -> ~"badge-gray";
+state_badge(_) -> ~"".
