@@ -12,19 +12,21 @@ mount(_Arg, _Req) ->
     {ok, Queues} = shigoto_dashboard:queue_stats(),
     Prefix = shigoto_board:prefix(),
     Bindings = #{id => ~"queues_view", queues => Queues, paused => #{}},
-    Layout = {shigoto_board_layout, render, main_content, #{
-        active_page => ~"queues",
-        prefix => Prefix,
-        ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
-        arizona_prefix => arizona_nova:prefix()
-    }},
+    Layout =
+        {shigoto_board_layout, render, main_content, #{
+            active_page => ~"queues",
+            prefix => Prefix,
+            ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+            arizona_prefix => arizona_nova:prefix()
+        }},
     arizona_view:new(?MODULE, Bindings, Layout).
 
 render(Bindings) ->
     Queues = arizona_template:get_binding(queues, Bindings),
     Paused = arizona_template:get_binding(paused, Bindings),
     EnrichedQueues = [Q#{is_paused => maps:get(maps:get(queue, Q), Paused, false)} || Q <- Queues],
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 2s</p>
         <div class="card">
@@ -44,7 +46,8 @@ render(Bindings) ->
             </table>
         </div>
     </div>
-    """).
+    """
+    ).
 
 handle_event(~"pause_queue", #{~"queue" := Queue}, View) ->
     logger:notice(#{msg => ~"Pausing queue", queue => Queue}),
@@ -71,13 +74,17 @@ handle_info(refresh, View) ->
 render_queue_row(Q) ->
     QName = maps:get(queue, Q),
     IsPaused = maps:get(is_paused, Q, false),
-    StatusBadge = case IsPaused of
-        true -> ~"<span class=\"badge badge-yellow\">paused</span>";
-        false -> ~"<span class=\"badge badge-green\">active</span>"
-    end,
-    PauseClick = <<"arizona.pushEventTo('queues_view', 'pause_queue', {queue: '", QName/binary, "'})">>,
-    ResumeClick = <<"arizona.pushEventTo('queues_view', 'resume_queue', {queue: '", QName/binary, "'})">>,
-    arizona_template:from_html(~"""
+    StatusBadge =
+        case IsPaused of
+            true -> ~"<span class=\"badge badge-yellow\">paused</span>";
+            false -> ~"<span class=\"badge badge-green\">active</span>"
+        end,
+    PauseClick =
+        <<"arizona.pushEventTo('queues_view', 'pause_queue', {queue: '", QName/binary, "'})">>,
+    ResumeClick =
+        <<"arizona.pushEventTo('queues_view', 'resume_queue', {queue: '", QName/binary, "'})">>,
+    arizona_template:from_html(
+        ~"""
     <tr>
         <td>{QName}</td>
         <td>{StatusBadge}</td>
@@ -89,7 +96,8 @@ render_queue_row(Q) ->
             <button class="btn btn-sm btn-green" onclick="{ResumeClick}">Resume</button>
         </td>
     </tr>
-    """).
+    """
+    ).
 
 %%----------------------------------------------------------------------
 %% Internal
@@ -98,10 +106,11 @@ render_queue_row(Q) ->
 update_pause_state(Queue, IsPaused, View) ->
     State = arizona_view:get_state(View),
     Paused = arizona_stateful:get_binding(paused, State),
-    NewPaused = case IsPaused of
-        true -> Paused#{Queue => true};
-        false -> maps:remove(Queue, Paused)
-    end,
+    NewPaused =
+        case IsPaused of
+            true -> Paused#{Queue => true};
+            false -> maps:remove(Queue, Paused)
+        end,
     {ok, Queues} = shigoto_dashboard:queue_stats(),
     S1 = arizona_stateful:put_binding(paused, NewPaused, State),
     S2 = arizona_stateful:put_binding(queues, Queues, S1),

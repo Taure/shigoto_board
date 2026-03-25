@@ -12,12 +12,13 @@ mount(_Arg, _Req) ->
     {ok, Batches} = shigoto_dashboard:batch_stats(),
     Prefix = shigoto_board:prefix(),
     Bindings = #{id => ~"batches_view", batches => Batches},
-    Layout = {shigoto_board_layout, render, main_content, #{
-        active_page => ~"batches",
-        prefix => Prefix,
-        ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
-        arizona_prefix => arizona_nova:prefix()
-    }},
+    Layout =
+        {shigoto_board_layout, render, main_content, #{
+            active_page => ~"batches",
+            prefix => Prefix,
+            ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+            arizona_prefix => arizona_nova:prefix()
+        }},
     arizona_view:new(?MODULE, Bindings, Layout).
 
 render(Bindings) ->
@@ -28,7 +29,8 @@ render(Bindings) ->
     end.
 
 render_empty(Bindings) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 3s</p>
         <div class="card">
@@ -36,10 +38,12 @@ render_empty(Bindings) ->
             <p class="empty">No active batches</p>
         </div>
     </div>
-    """).
+    """
+    ).
 
 render_with_data(Bindings, Batches) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 3s</p>
         <div class="card">
@@ -60,7 +64,8 @@ render_with_data(Bindings, Batches) ->
             </table>
         </div>
     </div>
-    """).
+    """
+    ).
 
 handle_info(refresh, View) ->
     erlang:send_after(3000, self(), refresh),
@@ -76,8 +81,13 @@ handle_info(refresh, View) ->
 render_batch_row(B) ->
     Total = maps:get(total_jobs, B, 0),
     Done = maps:get(completed_jobs, B, 0) + maps:get(discarded_jobs, B, 0),
-    Pct = case Total of 0 -> 0; _ -> (Done * 100) div Total end,
-    arizona_template:from_html(~"""
+    Pct =
+        case Total of
+            0 -> 0;
+            _ -> (Done * 100) div Total
+        end,
+    arizona_template:from_html(
+        ~"""
     <tr>
         <td class="mono">{integer_to_binary(maps:get(id, B))}</td>
         <td class="mono">{fmt_callback(maps:get(callback_worker, B, null))}</td>
@@ -91,7 +101,8 @@ render_batch_row(B) ->
         <td class="text-right">{integer_to_binary(maps:get(discarded_jobs, B, 0))}</td>
         <td class="text-right">{integer_to_binary(Total)}</td>
     </tr>
-    """).
+    """
+    ).
 
 %%----------------------------------------------------------------------
 %% Helpers

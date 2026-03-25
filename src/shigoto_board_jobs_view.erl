@@ -12,17 +12,19 @@ mount(_Arg, _Req) ->
     {ok, Jobs} = shigoto_dashboard:recent_failures(20),
     Prefix = shigoto_board:prefix(),
     Bindings = #{id => ~"jobs_view", jobs => Jobs},
-    Layout = {shigoto_board_layout, render, main_content, #{
-        active_page => ~"jobs",
-        prefix => Prefix,
-        ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
-        arizona_prefix => arizona_nova:prefix()
-    }},
+    Layout =
+        {shigoto_board_layout, render, main_content, #{
+            active_page => ~"jobs",
+            prefix => Prefix,
+            ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+            arizona_prefix => arizona_nova:prefix()
+        }},
     arizona_view:new(?MODULE, Bindings, Layout).
 
 render(Bindings) ->
     Jobs = arizona_template:get_binding(jobs, Bindings),
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 3s</p>
         <div class="card">
@@ -45,7 +47,8 @@ render(Bindings) ->
             </table>
         </div>
     </div>
-    """).
+    """
+    ).
 
 handle_event(~"retry", #{~"job_id" := JobIdBin}, View) ->
     logger:notice(#{msg => ~"Retrying job", job_id => JobIdBin}),
@@ -78,7 +81,8 @@ render_job_row(Job) ->
     Attempt = integer_to_binary(maps:get(attempt, Job, 0)),
     RetryClick = <<"arizona.pushEventTo('jobs_view', 'retry', {job_id: '", IdBin/binary, "'})">>,
     CancelClick = <<"arizona.pushEventTo('jobs_view', 'cancel', {job_id: '", IdBin/binary, "'})">>,
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <tr>
         <td class="mono">{IdBin}</td>
         <td class="mono">{Worker}</td>
@@ -90,7 +94,8 @@ render_job_row(Job) ->
             <button class="btn btn-sm btn-red" onclick="{CancelClick}">Cancel</button>
         </td>
     </tr>
-    """).
+    """
+    ).
 
 %%----------------------------------------------------------------------
 %% Internal

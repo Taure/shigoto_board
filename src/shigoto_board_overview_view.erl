@@ -32,7 +32,8 @@ render(Bindings) ->
     Counts = arizona_template:get_binding(counts, Bindings),
     Queues = arizona_template:get_binding(queues, Bindings),
     Workers = arizona_template:get_binding(workers, Bindings),
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 2s</p>
 
@@ -76,7 +77,8 @@ render(Bindings) ->
             </table>
         </div>
     </div>
-    """).
+    """
+    ).
 
 handle_info(refresh, View) ->
     erlang:send_after(2000, self(), refresh),
@@ -94,17 +96,20 @@ handle_info(refresh, View) ->
 %%----------------------------------------------------------------------
 
 render_queue_row(Q) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <tr>
         <td>{maps:get(queue, Q)}</td>
         <td class="text-right">{fmt(maps:get(available, Q, 0))}</td>
         <td class="text-right">{fmt(maps:get(executing, Q, 0))}</td>
         <td class="text-right">{fmt(maps:get(retryable, Q, 0))}</td>
     </tr>
-    """).
+    """
+    ).
 
 render_worker_row(W) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <tr>
         <td class="mono">{maps:get(worker, W)}</td>
         <td class="text-right">{fmt(maps:get(total, W, 0))}</td>
@@ -112,19 +117,22 @@ render_worker_row(W) ->
         <td class="text-right">{fmt(maps:get(completed, W, 0))}</td>
         <td class="text-right">{fmt(maps:get(discarded, W, 0))}</td>
     </tr>
-    """).
+    """
+    ).
 
 %%----------------------------------------------------------------------
 %% Helpers
 %%----------------------------------------------------------------------
 
 stat_card(Label, ColorClass, Value) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div class="stat">
         <div class="stat-label">{Label}</div>
         <div class="stat-value {ColorClass}">{fmt(Value)}</div>
     </div>
-    """).
+    """
+    ).
 
 fmt(N) when is_integer(N) -> integer_to_binary(N);
 fmt(V) -> iolist_to_binary(io_lib:format(~"~p", [V])).
