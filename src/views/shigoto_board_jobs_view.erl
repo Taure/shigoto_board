@@ -10,49 +10,42 @@ mount(_Arg, _Req) ->
         false -> ok
     end,
     {ok, Jobs} = shigoto_dashboard:recent_failures(20),
-    {ok, Stale} = shigoto_dashboard:stale_jobs(),
     Prefix = shigoto_board:prefix(),
-    Bindings = #{id => ~"jobs_view", jobs => Jobs, stale => Stale},
+    Bindings = #{id => ~"jobs_view", jobs => Jobs},
     Layout = {shigoto_board_layout, render, main_content, #{
-        active_page => ~"jobs", prefix => Prefix, ws_path => <<(arizona_nova:prefix())/binary, "/live">>, arizona_prefix => arizona_nova:prefix()
+        active_page => ~"jobs",
+        prefix => Prefix,
+        ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+        arizona_prefix => arizona_nova:prefix()
     }},
     arizona_view:new(?MODULE, Bindings, Layout).
 
 render(Bindings) ->
     Jobs = arizona_template:get_binding(jobs, Bindings),
-    arizona_template:from_html(
-        ~""""
+    arizona_template:from_html(~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 3s</p>
         <div class="card">
-            <div class="card-title">Recent Failures <span class="badge badge-red">{integer_to_binary(length(Jobs))}</span></div>
+            <div class="card-title">
+                Recent Failures
+                <span class="badge badge-red">{integer_to_binary(length(Jobs))}</span>
+            </div>
             <table>
-                <thead><tr><th>ID</th><th>Worker</th><th>Queue</th><th>State</th><th>Attempt</th><th>Actions</th></tr></thead>
+                <thead><tr>
+                    <th>ID</th>
+                    <th>Worker</th>
+                    <th>Queue</th>
+                    <th>State</th>
+                    <th class="text-right">Attempt</th>
+                    <th>Actions</th>
+                </tr></thead>
                 <tbody>
-                    {arizona_template:render_list(fun(Job) ->
-                        IdBin = integer_to_binary(maps:get(id, Job)),
-                        RetryClick = <<"arizona.pushEventTo('jobs_view', 'retry', {job_id: '", IdBin/binary, "'})">>,
-                        CancelClick = <<"arizona.pushEventTo('jobs_view', 'cancel', {job_id: '", IdBin/binary, "'})">>,
-                        arizona_template:from_html(~"""
-                        <tr>
-                            <td class="mono">{IdBin}</td>
-                            <td class="mono">{maps:get(worker, Job, ~"unknown")}</td>
-                            <td>{maps:get(queue, Job, ~"default")}</td>
-                            <td><span class="badge {state_badge(maps:get(state, Job, ~"unknown"))}">{maps:get(state, Job, ~"unknown")}</span></td>
-                            <td class="text-right">{integer_to_binary(maps:get(attempt, Job, 0))}</td>
-                            <td>
-                                <button class="btn btn-sm btn-green" onclick="{RetryClick}">Retry</button>
-                                <button class="btn btn-sm btn-red" onclick="{CancelClick}">Cancel</button>
-                            </td>
-                        </tr>
-                        """)
-                    end, Jobs)}
+                    {arizona_template:render_list(fun render_job_row/1, Jobs)}
                 </tbody>
             </table>
         </div>
     </div>
-    """"
-    ).
+    """).
 
 handle_event(~"retry", #{~"job_id" := JobIdBin}, View) ->
     logger:notice(#{msg => ~"Retrying job", job_id => JobIdBin}),
@@ -66,21 +59,48 @@ handle_event(~"cancel", #{~"job_id" := JobIdBin}, View) ->
     Pool = shigoto_config:pool(),
     shigoto:cancel(Pool, JobId),
     refresh_data(View);
-handle_event(Event, Params, View) ->
-    logger:warning(#{msg => ~"Unhandled jobs event", event => Event, params => Params}),
+handle_event(_Event, _Params, View) ->
     {[], View}.
 
 handle_info(refresh, View) ->
     erlang:send_after(3000, self(), refresh),
     refresh_data(View).
 
+%%----------------------------------------------------------------------
+%% Row renderer
+%%----------------------------------------------------------------------
+
+render_job_row(Job) ->
+    IdBin = integer_to_binary(maps:get(id, Job)),
+    Worker = maps:get(worker, Job, ~"unknown"),
+    Queue = maps:get(queue, Job, ~"default"),
+    JobState = maps:get(state, Job, ~"unknown"),
+    Attempt = integer_to_binary(maps:get(attempt, Job, 0)),
+    RetryClick = <<"arizona.pushEventTo('jobs_view', 'retry', {job_id: '", IdBin/binary, "'})">>,
+    CancelClick = <<"arizona.pushEventTo('jobs_view', 'cancel', {job_id: '", IdBin/binary, "'})">>,
+    arizona_template:from_html(~"""
+    <tr>
+        <td class="mono">{IdBin}</td>
+        <td class="mono">{Worker}</td>
+        <td>{Queue}</td>
+        <td><span class="badge {state_badge(JobState)}">{JobState}</span></td>
+        <td class="text-right">{Attempt}</td>
+        <td>
+            <button class="btn btn-sm btn-green" onclick="{RetryClick}">Retry</button>
+            <button class="btn btn-sm btn-red" onclick="{CancelClick}">Cancel</button>
+        </td>
+    </tr>
+    """).
+
+%%----------------------------------------------------------------------
+%% Internal
+%%----------------------------------------------------------------------
+
 refresh_data(View) ->
     {ok, Jobs} = shigoto_dashboard:recent_failures(20),
-    {ok, Stale} = shigoto_dashboard:stale_jobs(),
     State = arizona_view:get_state(View),
     S1 = arizona_stateful:put_binding(jobs, Jobs, State),
-    S2 = arizona_stateful:put_binding(stale, Stale, S1),
-    {[], arizona_view:update_state(S2, View)}.
+    {[], arizona_view:update_state(S1, View)}.
 
 state_badge(~"completed") -> ~"badge-green";
 state_badge(~"executing") -> ~"badge-blue";

@@ -13,7 +13,10 @@ mount(_Arg, _Req) ->
     Prefix = shigoto_board:prefix(),
     Bindings = #{id => ~"batches_view", batches => Batches},
     Layout = {shigoto_board_layout, render, main_content, #{
-        active_page => ~"batches", prefix => Prefix, ws_path => <<(arizona_nova:prefix())/binary, "/live">>, arizona_prefix => arizona_nova:prefix()
+        active_page => ~"batches",
+        prefix => Prefix,
+        ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+        arizona_prefix => arizona_nova:prefix()
     }},
     arizona_view:new(?MODULE, Bindings, Layout).
 
@@ -36,37 +39,28 @@ render_empty(Bindings) ->
     """).
 
 render_with_data(Bindings, Batches) ->
-    arizona_template:from_html(
-        ~""""
+    arizona_template:from_html(~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 3s</p>
         <div class="card">
             <div class="card-title">Active Batches</div>
             <table>
-                <thead><tr><th>ID</th><th>Callback</th><th>State</th><th>Progress</th><th class="text-right">Completed</th><th class="text-right">Discarded</th><th class="text-right">Total</th></tr></thead>
+                <thead><tr>
+                    <th>ID</th>
+                    <th>Callback</th>
+                    <th>State</th>
+                    <th>Progress</th>
+                    <th class="text-right">Completed</th>
+                    <th class="text-right">Discarded</th>
+                    <th class="text-right">Total</th>
+                </tr></thead>
                 <tbody>
-                    {arizona_template:render_list(fun(B) ->
-                        Total = maps:get(total_jobs, B, 0),
-                        Done = maps:get(completed_jobs, B, 0) + maps:get(discarded_jobs, B, 0),
-                        Pct = case Total of 0 -> 0; _ -> (Done * 100) div Total end,
-                        arizona_template:from_html(~"""
-                        <tr>
-                            <td class="mono">{integer_to_binary(maps:get(id, B))}</td>
-                            <td class="mono">{fmt_cb(maps:get(callback_worker, B, null))}</td>
-                            <td><span class="badge">{maps:get(state, B, ~"active")}</span></td>
-                            <td><div class="bar"><div class="bar-fill bar-fill-green" style="width:{integer_to_binary(Pct)}%"></div></div></td>
-                            <td class="text-right">{integer_to_binary(maps:get(completed_jobs, B, 0))}</td>
-                            <td class="text-right">{integer_to_binary(maps:get(discarded_jobs, B, 0))}</td>
-                            <td class="text-right">{integer_to_binary(Total)}</td>
-                        </tr>
-                        """)
-                    end, Batches)}
+                    {arizona_template:render_list(fun render_batch_row/1, Batches)}
                 </tbody>
             </table>
         </div>
     </div>
-    """"
-    ).
+    """).
 
 handle_info(refresh, View) ->
     erlang:send_after(3000, self(), refresh),
@@ -75,7 +69,35 @@ handle_info(refresh, View) ->
     S1 = arizona_stateful:put_binding(batches, Batches, State),
     {[], arizona_view:update_state(S1, View)}.
 
-fmt_cb(null) -> ~"-";
-fmt_cb(V) when is_binary(V) -> V;
-fmt_cb(V) when is_atom(V) -> atom_to_binary(V);
-fmt_cb(_) -> ~"-".
+%%----------------------------------------------------------------------
+%% Row renderer
+%%----------------------------------------------------------------------
+
+render_batch_row(B) ->
+    Total = maps:get(total_jobs, B, 0),
+    Done = maps:get(completed_jobs, B, 0) + maps:get(discarded_jobs, B, 0),
+    Pct = case Total of 0 -> 0; _ -> (Done * 100) div Total end,
+    arizona_template:from_html(~"""
+    <tr>
+        <td class="mono">{integer_to_binary(maps:get(id, B))}</td>
+        <td class="mono">{fmt_callback(maps:get(callback_worker, B, null))}</td>
+        <td><span class="badge">{maps:get(state, B, ~"active")}</span></td>
+        <td>
+            <div class="bar">
+                <div class="bar-fill bar-fill-green" style="width:{integer_to_binary(Pct)}%"></div>
+            </div>
+        </td>
+        <td class="text-right">{integer_to_binary(maps:get(completed_jobs, B, 0))}</td>
+        <td class="text-right">{integer_to_binary(maps:get(discarded_jobs, B, 0))}</td>
+        <td class="text-right">{integer_to_binary(Total)}</td>
+    </tr>
+    """).
+
+%%----------------------------------------------------------------------
+%% Helpers
+%%----------------------------------------------------------------------
+
+fmt_callback(null) -> ~"-";
+fmt_callback(V) when is_binary(V) -> V;
+fmt_callback(V) when is_atom(V) -> atom_to_binary(V);
+fmt_callback(_) -> ~"-".
