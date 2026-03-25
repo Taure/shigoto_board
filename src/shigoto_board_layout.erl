@@ -25,6 +25,7 @@ render(Bindings) ->
             <div class="nav-links">
                 <a href="{arizona_template:get_binding(prefix, Bindings)}" class="{nav_class(arizona_template:get_binding(active_page, Bindings), ~"overview")}">Overview</a>
                 <a href="{arizona_template:get_binding(prefix, Bindings)}/queues" class="{nav_class(arizona_template:get_binding(active_page, Bindings), ~"queues")}">Queues</a>
+                <a href="{arizona_template:get_binding(prefix, Bindings)}/workers" class="{nav_class(arizona_template:get_binding(active_page, Bindings), ~"workers")}">Workers</a>
                 <a href="{arizona_template:get_binding(prefix, Bindings)}/jobs" class="{nav_class(arizona_template:get_binding(active_page, Bindings), ~"jobs")}">Jobs</a>
                 <a href="{arizona_template:get_binding(prefix, Bindings)}/batches" class="{nav_class(arizona_template:get_binding(active_page, Bindings), ~"batches")}">Batches</a>
                 <a href="{arizona_template:get_binding(prefix, Bindings)}/cron" class="{nav_class(arizona_template:get_binding(active_page, Bindings), ~"cron")}">Cron</a>

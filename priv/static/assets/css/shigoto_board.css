@@ -2,6 +2,7 @@
     --bg: #0f172a;
     --bg-card: #1e293b;
     --bg-nav: #1e293b;
+    --bg-input: #0f172a;
     --fg: #e2e8f0;
     --fg-dim: #94a3b8;
     --border: #334155;
@@ -75,3 +76,28 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 .alert-red { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
 
 .empty { color: var(--fg-dim); font-style: italic; padding: 1rem 0; }
+
+/* Filter bar */
+.filter-bar { padding: 1rem 1.25rem; }
+.filter-row { display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; }
+.filter-group { display: flex; flex-direction: column; gap: 0.25rem; }
+.filter-label { font-size: 0.7rem; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.filter-select, .filter-input {
+    background: var(--bg-input);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+    min-width: 140px;
+}
+.filter-select:focus, .filter-input:focus {
+    outline: none;
+    border-color: var(--blue);
+}
+
+/* Error text */
+.error-text { color: var(--red); font-size: 0.75rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Actions cell */
+.actions-cell { white-space: nowrap; display: flex; gap: 0.25rem; }

@@ -1,134 +1,114 @@
 -module(shigoto_board_failures_view).
--moduledoc """
-Recent failures view with error details and retry actions.
-""".
 -behaviour(arizona_view).
+-compile({parse_transform, arizona_parse_transform}).
 
 -export([mount/2, render/1, handle_event/3, handle_info/2]).
 
--doc false.
 mount(_Arg, _Req) ->
     case arizona_live:is_connected(self()) of
-        true -> erlang:send_after(5000, self(), refresh);
+        true -> erlang:send_after(3000, self(), refresh);
         false -> ok
     end,
-    {ok, #{
-        layout => fun shigoto_board_layout:render/1,
-        bindings => #{
-            title => <<"Failures - Shigoto Board">>,
-            active_page => <<"failures">>,
-            failures => get_failures()
-        }
-    }}.
+    {ok, Stale} = shigoto_dashboard:stale_jobs(),
+    Prefix = shigoto_board:prefix(),
+    Bindings = #{id => ~"failures_view", stale_jobs => Stale},
+    Layout =
+        {shigoto_board_layout, render, main_content, #{
+            active_page => ~"overview",
+            prefix => Prefix,
+            ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+            arizona_prefix => arizona_nova:prefix()
+        }},
+    arizona_view:new(?MODULE, Bindings, Layout).
 
--doc false.
 render(Bindings) ->
-    Failures = maps:get(failures, Bindings, []),
-    iolist_to_binary([
-        <<"<h2>Recent Failures</h2>">>,
-        <<"<table class=\"board-table\"><thead><tr>">>,
-        <<"<th>ID</th><th>Worker</th><th>Queue</th><th>State</th>">>,
-        <<"<th>Attempt</th><th>Last Error</th><th>Actions</th>">>,
-        <<"</tr></thead><tbody>">>,
-        [failure_row(F) || F <- Failures],
-        <<"</tbody></table>">>
-    ]).
-
--doc false.
-handle_event(<<"retry">>, #{<<"job_id">> := JobIdBin}, View) ->
-    Pool = shigoto_config:pool(),
-    JobId = binary_to_integer(JobIdBin),
-    _ = shigoto:retry(Pool, JobId),
-    State0 = arizona_view:get_state(View),
-    State1 = arizona_stateful:put_binding(failures, get_failures(), State0),
-    {[], arizona_view:update_state(State1, View)};
-handle_event(_, _, View) ->
-    {[], View}.
-
--doc false.
-handle_info(refresh, View) ->
-    State0 = arizona_view:get_state(View),
-    State1 = arizona_stateful:put_binding(failures, get_failures(), State0),
-    erlang:send_after(5000, self(), refresh),
-    {[], arizona_view:update_state(State1, View)}.
-
-%%----------------------------------------------------------------------
-%% Internal
-%%----------------------------------------------------------------------
-
-get_failures() ->
-    case shigoto_dashboard:recent_failures(50) of
-        {ok, Failures} -> Failures;
-        _ -> []
+    Stale = arizona_template:get_binding(stale_jobs, Bindings),
+    case Stale of
+        [] -> render_empty(Bindings);
+        _ -> render_with_data(Bindings, Stale)
     end.
 
-failure_row(F) ->
-    Id = maps:get(id, F, 0),
-    IdBin = integer_to_binary(Id),
-    State = maps:get(state, F, <<>>),
-    LastError = extract_last_error(maps:get(errors, F, <<"[]">>)),
-    iolist_to_binary([
-        <<"<tr>">>,
-        <<"<td>">>,
-        IdBin,
-        <<"</td>">>,
-        <<"<td class=\"mono\">">>,
-        to_bin(maps:get(worker, F, <<>>)),
-        <<"</td>">>,
-        <<"<td>">>,
-        to_bin(maps:get(queue, F, <<>>)),
-        <<"</td>">>,
-        <<"<td><span class=\"state-badge state-">>,
-        State,
-        <<"\">">>,
-        State,
-        <<"</span></td>">>,
-        <<"<td>">>,
-        i2b(maps:get(attempt, F, 0)),
-        <<"/">>,
-        i2b(maps:get(max_attempts, F, 3)),
-        <<"</td>">>,
-        <<"<td class=\"mono error-text\">">>,
-        truncate(LastError, 80),
-        <<"</td>">>,
-        <<"<td>">>,
-        case State of
-            <<"discarded">> ->
-                <<"<button arizona-click=\"retry\" arizona-value-job_id=\"", IdBin/binary,
-                    "\">Retry</button>">>;
-            _ ->
-                <<>>
-        end,
-        <<"</td>">>,
-        <<"</tr>">>
-    ]).
+render_empty(Bindings) ->
+    arizona_template:from_html(
+        ~"""
+    <div id="{arizona_template:get_binding(id, Bindings)}">
+        <p class="refresh-info">Auto-refreshes every 3s</p>
+        <div class="card">
+            <div class="card-title">Stale Jobs</div>
+            <p class="empty">No stale jobs detected</p>
+        </div>
+    </div>
+    """
+    ).
 
-extract_last_error(Errors) when is_binary(Errors) ->
-    try
-        case json:decode(Errors) of
-            List when is_list(List), length(List) > 0 ->
-                Last = lists:last(List),
-                maps:get(<<"error">>, Last, <<>>);
-            _ ->
-                <<>>
-        end
-    catch
-        _:_ -> <<>>
-    end;
-extract_last_error(Errors) when is_list(Errors), length(Errors) > 0 ->
-    Last = lists:last(Errors),
-    maps:get(<<"error">>, Last, <<>>);
-extract_last_error(_) ->
-    <<>>.
+render_with_data(Bindings, Stale) ->
+    arizona_template:from_html(
+        ~"""
+    <div id="{arizona_template:get_binding(id, Bindings)}">
+        <p class="refresh-info">Auto-refreshes every 3s</p>
+        <div class="alert alert-red">
+            {integer_to_binary(length(Stale))} stale job(s) detected - these may be zombie processes
+        </div>
+        <div class="card">
+            <div class="card-title">
+                Stale Jobs
+                <span class="badge badge-red">{integer_to_binary(length(Stale))}</span>
+            </div>
+            <table>
+                <thead><tr>
+                    <th>ID</th>
+                    <th>Worker</th>
+                    <th>Queue</th>
+                    <th class="text-right">Attempt</th>
+                    <th>Last Heartbeat</th>
+                </tr></thead>
+                <tbody>
+                    {arizona_template:render_list(fun render_stale_row/1, Stale)}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    ).
 
-truncate(Bin, Max) when byte_size(Bin) > Max ->
-    <<(binary:part(Bin, 0, Max))/binary, "...">>;
-truncate(Bin, _Max) ->
-    Bin.
+handle_event(_Event, _Params, View) ->
+    {[], View}.
 
-to_bin(V) when is_binary(V) -> V;
-to_bin(V) when is_atom(V) -> atom_to_binary(V, utf8);
-to_bin(_) -> <<>>.
+handle_info(refresh, View) ->
+    erlang:send_after(3000, self(), refresh),
+    {ok, Stale} = shigoto_dashboard:stale_jobs(),
+    State = arizona_view:get_state(View),
+    S1 = arizona_stateful:put_binding(stale_jobs, Stale, State),
+    {[], arizona_view:update_state(S1, View)}.
 
-i2b(V) when is_integer(V) -> integer_to_binary(V);
-i2b(_) -> <<"0">>.
+render_stale_row(J) ->
+    IdBin = integer_to_binary(maps:get(id, J)),
+    Heartbeat = fmt_timestamp(maps:get(heartbeat_at, J, null)),
+    arizona_template:from_html(
+        ~"""
+    <tr>
+        <td class="mono">{IdBin}</td>
+        <td class="mono">{fmt_bin(maps:get(worker, J, ~"unknown"))}</td>
+        <td>{fmt_bin(maps:get(queue, J, ~"default"))}</td>
+        <td class="text-right">{integer_to_binary(maps:get(attempt, J, 0))}</td>
+        <td class="text-red">{Heartbeat}</td>
+    </tr>
+    """
+    ).
+
+fmt_bin(V) when is_binary(V) -> V;
+fmt_bin(V) when is_atom(V) -> atom_to_binary(V);
+fmt_bin(_) -> ~"".
+
+fmt_timestamp(null) ->
+    ~"never";
+fmt_timestamp(undefined) ->
+    ~"never";
+fmt_timestamp({{Y, Mo, D}, {H, Mi, S}}) ->
+    iolist_to_binary(
+        io_lib:format(~"~4..0B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B", [Y, Mo, D, H, Mi, S])
+    );
+fmt_timestamp(V) when is_binary(V) ->
+    V;
+fmt_timestamp(_) ->
+    ~"unknown".

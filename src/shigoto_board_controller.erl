@@ -25,6 +25,7 @@ resolve_view(#{path := Path}) ->
 resolve_view_module(Path) ->
     case page_from_path(Path) of
         <<"queues">> -> {shigoto_board_queues_view, undefined};
+        <<"workers">> -> {shigoto_board_workers_view, undefined};
         <<"jobs">> -> {shigoto_board_jobs_view, undefined};
         <<"batches">> -> {shigoto_board_batches_view, undefined};
         <<"cron">> -> {shigoto_board_cron_view, undefined};
@@ -32,12 +33,13 @@ resolve_view_module(Path) ->
     end.
 
 page_from_path(Path) ->
+    Pages = [<<"queues">>, <<"workers">>, <<"jobs">>, <<"batches">>, <<"cron">>],
     case binary:split(Path, <<"/">>, [global, trim_all]) of
         [] ->
             <<"overview">>;
         Parts ->
             Last = lists:last(Parts),
-            case lists:member(Last, [<<"queues">>, <<"jobs">>, <<"batches">>, <<"cron">>]) of
+            case lists:member(Last, Pages) of
                 true -> Last;
                 false -> <<"overview">>
             end
