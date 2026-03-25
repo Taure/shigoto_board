@@ -8,12 +8,13 @@ mount(_Arg, _Req) ->
     Entries = shigoto_config:cron_entries(),
     Prefix = shigoto_board:prefix(),
     Bindings = #{id => ~"cron_view", entries => Entries},
-    Layout = {shigoto_board_layout, render, main_content, #{
-        active_page => ~"cron",
-        prefix => Prefix,
-        ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
-        arizona_prefix => arizona_nova:prefix()
-    }},
+    Layout =
+        {shigoto_board_layout, render, main_content, #{
+            active_page => ~"cron",
+            prefix => Prefix,
+            ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+            arizona_prefix => arizona_nova:prefix()
+        }},
     arizona_view:new(?MODULE, Bindings, Layout).
 
 render(Bindings) ->
@@ -24,17 +25,20 @@ render(Bindings) ->
     end.
 
 render_empty(Bindings) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <div class="card">
             <div class="card-title">Cron Entries</div>
             <p class="empty">No cron entries configured</p>
         </div>
     </div>
-    """).
+    """
+    ).
 
 render_with_entries(Bindings, Entries) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <div class="card">
             <div class="card-title">Cron Entries</div>
@@ -50,20 +54,23 @@ render_with_entries(Bindings, Entries) ->
             </table>
         </div>
     </div>
-    """).
+    """
+    ).
 
 %%----------------------------------------------------------------------
 %% Row renderer
 %%----------------------------------------------------------------------
 
 render_cron_row({Name, Schedule, Worker, _Args}) ->
-    arizona_template:from_html(~"""
+    arizona_template:from_html(
+        ~"""
     <tr>
         <td>{fmt(Name)}</td>
         <td class="mono">{Schedule}</td>
         <td class="mono">{atom_to_binary(Worker)}</td>
     </tr>
-    """).
+    """
+    ).
 
 %%----------------------------------------------------------------------
 %% Helpers

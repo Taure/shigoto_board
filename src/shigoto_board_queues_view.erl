@@ -1,98 +1,120 @@
 -module(shigoto_board_queues_view).
--moduledoc """
-Queue detail view with per-queue statistics and pause/resume controls.
-""".
 -behaviour(arizona_view).
+-compile({parse_transform, arizona_parse_transform}).
 
 -export([mount/2, render/1, handle_event/3, handle_info/2]).
 
--doc false.
 mount(_Arg, _Req) ->
     case arizona_live:is_connected(self()) of
-        true -> erlang:send_after(3000, self(), refresh);
+        true -> erlang:send_after(2000, self(), refresh);
         false -> ok
     end,
-    {ok, #{
-        layout => fun shigoto_board_layout:render/1,
-        bindings => #{
-            title => <<"Queues - Shigoto Board">>,
-            active_page => <<"queues">>,
-            queue_stats => get_queue_stats()
-        }
-    }}.
+    {ok, Queues} = shigoto_dashboard:queue_stats(),
+    Prefix = shigoto_board:prefix(),
+    Bindings = #{id => ~"queues_view", queues => Queues, paused => #{}},
+    Layout =
+        {shigoto_board_layout, render, main_content, #{
+            active_page => ~"queues",
+            prefix => Prefix,
+            ws_path => <<(arizona_nova:prefix())/binary, "/live">>,
+            arizona_prefix => arizona_nova:prefix()
+        }},
+    arizona_view:new(?MODULE, Bindings, Layout).
 
--doc false.
 render(Bindings) ->
-    QueueStats = maps:get(queue_stats, Bindings, []),
-    iolist_to_binary([
-        <<"<h2>Queue Details</h2>">>,
-        <<"<table class=\"board-table\"><thead><tr>">>,
-        <<"<th>Queue</th><th>Available</th><th>Executing</th><th>Retryable</th>">>,
-        <<"<th>Completed</th><th>Discarded</th><th>Actions</th>">>,
-        <<"</tr></thead><tbody>">>,
-        [queue_row(Q) || Q <- QueueStats],
-        <<"</tbody></table>">>
-    ]).
+    Queues = arizona_template:get_binding(queues, Bindings),
+    Paused = arizona_template:get_binding(paused, Bindings),
+    EnrichedQueues = [Q#{is_paused => maps:get(maps:get(queue, Q), Paused, false)} || Q <- Queues],
+    arizona_template:from_html(
+        ~"""
+    <div id="{arizona_template:get_binding(id, Bindings)}">
+        <p class="refresh-info">Auto-refreshes every 2s</p>
+        <div class="card">
+            <div class="card-title">Queues</div>
+            <table>
+                <thead><tr>
+                    <th>Queue</th>
+                    <th>Status</th>
+                    <th class="text-right">Available</th>
+                    <th class="text-right">Executing</th>
+                    <th class="text-right">Retryable</th>
+                    <th>Actions</th>
+                </tr></thead>
+                <tbody>
+                    {arizona_template:render_list(fun render_queue_row/1, EnrichedQueues)}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    ).
 
--doc false.
-handle_event(<<"pause">>, #{<<"queue">> := Queue}, View) ->
-    _ = shigoto:pause_queue(Queue),
-    {[], View};
-handle_event(<<"resume">>, #{<<"queue">> := Queue}, View) ->
-    _ = shigoto:resume_queue(Queue),
-    {[], View};
-handle_event(_, _, View) ->
+handle_event(~"pause_queue", #{~"queue" := Queue}, View) ->
+    logger:notice(#{msg => ~"Pausing queue", queue => Queue}),
+    shigoto:pause_queue(Queue),
+    update_pause_state(Queue, true, View);
+handle_event(~"resume_queue", #{~"queue" := Queue}, View) ->
+    logger:notice(#{msg => ~"Resuming queue", queue => Queue}),
+    shigoto:resume_queue(Queue),
+    update_pause_state(Queue, false, View);
+handle_event(_Event, _Params, View) ->
     {[], View}.
 
--doc false.
 handle_info(refresh, View) ->
-    State0 = arizona_view:get_state(View),
-    State1 = arizona_stateful:put_binding(queue_stats, get_queue_stats(), State0),
-    erlang:send_after(3000, self(), refresh),
-    {[], arizona_view:update_state(State1, View)}.
+    erlang:send_after(2000, self(), refresh),
+    {ok, Queues} = shigoto_dashboard:queue_stats(),
+    State = arizona_view:get_state(View),
+    S1 = arizona_stateful:put_binding(queues, Queues, State),
+    {[], arizona_view:update_state(S1, View)}.
+
+%%----------------------------------------------------------------------
+%% Row renderer
+%%----------------------------------------------------------------------
+
+render_queue_row(Q) ->
+    QName = maps:get(queue, Q),
+    IsPaused = maps:get(is_paused, Q, false),
+    StatusBadge =
+        case IsPaused of
+            true -> ~"<span class=\"badge badge-yellow\">paused</span>";
+            false -> ~"<span class=\"badge badge-green\">active</span>"
+        end,
+    PauseClick =
+        <<"arizona.pushEventTo('queues_view', 'pause_queue', {queue: '", QName/binary, "'})">>,
+    ResumeClick =
+        <<"arizona.pushEventTo('queues_view', 'resume_queue', {queue: '", QName/binary, "'})">>,
+    arizona_template:from_html(
+        ~"""
+    <tr>
+        <td>{QName}</td>
+        <td>{StatusBadge}</td>
+        <td class="text-right">{fmt(maps:get(available, Q, 0))}</td>
+        <td class="text-right">{fmt(maps:get(executing, Q, 0))}</td>
+        <td class="text-right">{fmt(maps:get(retryable, Q, 0))}</td>
+        <td>
+            <button class="btn btn-sm btn-red" onclick="{PauseClick}">Pause</button>
+            <button class="btn btn-sm btn-green" onclick="{ResumeClick}">Resume</button>
+        </td>
+    </tr>
+    """
+    ).
 
 %%----------------------------------------------------------------------
 %% Internal
 %%----------------------------------------------------------------------
 
-get_queue_stats() ->
-    case shigoto_dashboard:queue_stats() of
-        {ok, Stats} -> Stats;
-        _ -> []
-    end.
+update_pause_state(Queue, IsPaused, View) ->
+    State = arizona_view:get_state(View),
+    Paused = arizona_stateful:get_binding(paused, State),
+    NewPaused =
+        case IsPaused of
+            true -> Paused#{Queue => true};
+            false -> maps:remove(Queue, Paused)
+        end,
+    {ok, Queues} = shigoto_dashboard:queue_stats(),
+    S1 = arizona_stateful:put_binding(paused, NewPaused, State),
+    S2 = arizona_stateful:put_binding(queues, Queues, S1),
+    {[], arizona_view:update_state(S2, View)}.
 
-queue_row(QueueMap) ->
-    Queue = maps:get(queue, QueueMap, <<"unknown">>),
-    iolist_to_binary([
-        <<"<tr>">>,
-        <<"<td>">>,
-        Queue,
-        <<"</td>">>,
-        <<"<td>">>,
-        i2b(maps:get(available, QueueMap, 0)),
-        <<"</td>">>,
-        <<"<td>">>,
-        i2b(maps:get(executing, QueueMap, 0)),
-        <<"</td>">>,
-        <<"<td>">>,
-        i2b(maps:get(retryable, QueueMap, 0)),
-        <<"</td>">>,
-        <<"<td>">>,
-        i2b(maps:get(completed, QueueMap, 0)),
-        <<"</td>">>,
-        <<"<td>">>,
-        i2b(maps:get(discarded, QueueMap, 0)),
-        <<"</td>">>,
-        <<"<td>">>,
-        <<"<button arizona-click=\"pause\" arizona-value-queue=\"">>,
-        Queue,
-        <<"\">Pause</button> ">>,
-        <<"<button arizona-click=\"resume\" arizona-value-queue=\"">>,
-        Queue,
-        <<"\">Resume</button>">>,
-        <<"</td>">>,
-        <<"</tr>">>
-    ]).
-
-i2b(V) when is_integer(V) -> integer_to_binary(V);
-i2b(_) -> <<"0">>.
+fmt(N) when is_integer(N) -> integer_to_binary(N);
+fmt(V) -> iolist_to_binary(io_lib:format(~"~p", [V])).
