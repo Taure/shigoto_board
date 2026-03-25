@@ -14,7 +14,8 @@ jobs:
       pull-requests: write
     with:
       version-file: '.tool-versions'
-      enable-ex-doc: true
+      enable-eunit: false
+      enable-ex-doc: false
       enable-audit: true
       enable-sbom: false
       enable-sbom-scan: false
