@@ -5,7 +5,7 @@
   0},
  {<<"arizona_nova">>,
   {git,"https://github.com/novaframework/arizona_nova.git",
-       {ref,"0207241cfc4b11addd91504fa5bf87b87174abee"}},
+       {ref,"598695172ee7d90402541c843bde410c5b4d0d70"}},
   0},
  {<<"backoff">>,{pkg,<<"backoff">>,<<"1.1.6">>},2},
  {<<"cowboy">>,{pkg,<<"cowboy">>,<<"2.13.0">>},1},
