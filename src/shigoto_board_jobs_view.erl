@@ -4,21 +4,25 @@
 
 -export([mount/2, render/1, handle_event/3, handle_info/2]).
 
+-define(PAGE_SIZE, 25).
+
 mount(_Arg, _Req) ->
     case arizona_live:is_connected(self()) of
         true -> erlang:send_after(3000, self(), refresh);
         false -> ok
     end,
-    Filters = #{limit => 50, offset => 0},
+    Filters = #{limit => ?PAGE_SIZE, offset => 0},
     {ok, Jobs} = search_jobs(Filters),
     Prefix = shigoto_board:prefix(),
     Bindings = #{
         id => ~"jobs_view",
         jobs => Jobs,
         filters => Filters,
+        page => 1,
         filter_state => ~"",
         filter_queue => ~"",
-        filter_worker => ~""
+        filter_worker => ~"",
+        expanded => #{}
     },
     Layout =
         {shigoto_board_layout, render, main_content, #{
@@ -31,15 +35,20 @@ mount(_Arg, _Req) ->
 
 render(Bindings) ->
     Jobs = arizona_template:get_binding(jobs, Bindings),
+    Page = arizona_template:get_binding(page, Bindings),
     FilterState = arizona_template:get_binding(filter_state, Bindings),
     FilterQueue = arizona_template:get_binding(filter_queue, Bindings),
     FilterWorker = arizona_template:get_binding(filter_worker, Bindings),
+    Expanded = arizona_template:get_binding(expanded, Bindings),
     StateChange =
         <<"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"state\": \"' + this.value + '\"}'))">>,
     QueueChange =
         <<"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"queue\": \"' + this.value + '\"}'))">>,
     WorkerChange =
         <<"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"worker\": \"' + this.value + '\"}'))">>,
+    PrevClick = <<"arizona.pushEventTo('jobs_view', 'page', JSON.parse('{\"dir\": \"prev\"}'))">>,
+    NextClick = <<"arizona.pushEventTo('jobs_view', 'page', JSON.parse('{\"dir\": \"next\"}'))">>,
+    HasNext = length(Jobs) =:= ?PAGE_SIZE,
     arizona_template:from_html(
         ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
@@ -77,9 +86,10 @@ render(Bindings) ->
         <div class="card">
             <div class="card-title">
                 Jobs
-                <span class="badge badge-blue">{integer_to_binary(length(Jobs))}</span>
+                <span class="badge badge-blue">Page {integer_to_binary(Page)}</span>
             </div>
-            {render_jobs_table(Jobs)}
+            {render_jobs_table(Jobs, Expanded)}
+            {render_pagination(Page, HasNext, PrevClick, NextClick)}
         </div>
     </div>
     """
@@ -100,7 +110,37 @@ handle_event(~"filter", Params, View) ->
     S3 = arizona_stateful:put_binding(filter_state, FS, S2),
     S4 = arizona_stateful:put_binding(filter_queue, FQ, S3),
     S5 = arizona_stateful:put_binding(filter_worker, FW, S4),
-    {[], arizona_view:update_state(S5, View)};
+    S6 = arizona_stateful:put_binding(page, 1, S5),
+    S7 = arizona_stateful:put_binding(expanded, #{}, S6),
+    {[], arizona_view:update_state(S7, View)};
+handle_event(~"page", #{~"dir" := Dir}, View) ->
+    State = arizona_view:get_state(View),
+    Page = arizona_stateful:get_binding(page, State),
+    Filters0 = arizona_stateful:get_binding(filters, State),
+    NewPage =
+        case Dir of
+            ~"next" -> Page + 1;
+            ~"prev" -> max(1, Page - 1)
+        end,
+    Offset = (NewPage - 1) * ?PAGE_SIZE,
+    Filters = Filters0#{offset => Offset},
+    {ok, Jobs} = search_jobs(Filters),
+    S1 = arizona_stateful:put_binding(jobs, Jobs, State),
+    S2 = arizona_stateful:put_binding(filters, Filters, S1),
+    S3 = arizona_stateful:put_binding(page, NewPage, S2),
+    S4 = arizona_stateful:put_binding(expanded, #{}, S3),
+    {[], arizona_view:update_state(S4, View)};
+handle_event(~"toggle_detail", #{~"job_id" := JobIdBin}, View) ->
+    JobId = binary_to_integer(JobIdBin),
+    State = arizona_view:get_state(View),
+    Expanded = arizona_stateful:get_binding(expanded, State),
+    NewExpanded =
+        case maps:is_key(JobId, Expanded) of
+            true -> maps:remove(JobId, Expanded);
+            false -> Expanded#{JobId => true}
+        end,
+    S1 = arizona_stateful:put_binding(expanded, NewExpanded, State),
+    {[], arizona_view:update_state(S1, View)};
 handle_event(~"retry", #{~"job_id" := JobIdBin}, View) ->
     JobId = binary_to_integer(JobIdBin),
     Pool = shigoto_config:pool(),
@@ -122,55 +162,198 @@ handle_info(refresh, View) ->
 %% Rendering helpers
 %%----------------------------------------------------------------------
 
-render_jobs_table([]) ->
+render_jobs_table([], _Expanded) ->
     arizona_template:from_html(
         ~"""
     <p class="empty">No jobs match the current filters</p>
     """
     );
-render_jobs_table(Jobs) ->
+render_jobs_table(Jobs, Expanded) ->
+    Now = erlang:universaltime(),
+    Rows = lists:flatmap(fun(Job) -> job_rows(Job, Expanded, Now) end, Jobs),
     arizona_template:from_html(
         ~"""
     <table>
         <thead><tr>
+            <th></th>
             <th>ID</th>
             <th>Worker</th>
             <th>Queue</th>
             <th>State</th>
             <th class="text-right">Attempt</th>
-            <th>Error</th>
+            <th>Inserted</th>
             <th>Actions</th>
         </tr></thead>
         <tbody>
-            {arizona_template:render_list(fun render_job_row/1, Jobs)}
+            {arizona_template:render_list(fun render_row_item/1, Rows)}
         </tbody>
     </table>
     """
     ).
 
-render_job_row(Job) ->
+job_rows(Job, Expanded, Now) ->
+    JobId = maps:get(id, Job),
+    IsExpanded = maps:is_key(JobId, Expanded),
+    case IsExpanded of
+        false -> [{row, Job, Now}];
+        true -> [{row, Job, Now}, {detail, Job, Now}]
+    end.
+
+render_row_item({row, Job, Now}) ->
+    render_job_row(Job, Now);
+render_row_item({detail, Job, Now}) ->
+    render_detail_row(Job, Now).
+
+render_job_row(Job, Now) ->
     IdBin = integer_to_binary(maps:get(id, Job)),
     Worker = fmt_bin(maps:get(worker, Job, ~"unknown")),
     Queue = fmt_bin(maps:get(queue, Job, ~"default")),
     JobState = fmt_bin(maps:get(state, Job, ~"unknown")),
     Attempt = integer_to_binary(maps:get(attempt, Job, 0)),
     MaxAttempts = integer_to_binary(maps:get(max_attempts, Job, 3)),
-    LastError = extract_last_error(maps:get(errors, Job, [])),
-    RetryClick = <<"arizona.pushEventTo('jobs_view', 'retry', {job_id: '", IdBin/binary, "'})">>,
-    CancelClick = <<"arizona.pushEventTo('jobs_view', 'cancel', {job_id: '", IdBin/binary, "'})">>,
+    InsertedAgo = time_ago(maps:get(inserted_at, Job, undefined), Now),
+    ToggleClick =
+        <<"arizona.pushEventTo('jobs_view', 'toggle_detail', JSON.parse('{\"job_id\": \"",
+            IdBin/binary, "\"}'))">>,
+    RetryClick =
+        <<"arizona.pushEventTo('jobs_view', 'retry', JSON.parse('{\"job_id\": \"", IdBin/binary,
+            "\"}'))">>,
+    CancelClick =
+        <<"arizona.pushEventTo('jobs_view', 'cancel', JSON.parse('{\"job_id\": \"", IdBin/binary,
+            "\"}'))">>,
     arizona_template:from_html(
         ~"""
-    <tr>
+    <tr class="job-row" onclick="{ToggleClick}">
+        <td class="expand-col">&#9654;</td>
         <td class="mono">{IdBin}</td>
         <td class="mono">{Worker}</td>
         <td>{Queue}</td>
         <td><span class="badge {state_badge(JobState)}">{JobState}</span></td>
         <td class="text-right">{Attempt}/{MaxAttempts}</td>
-        <td class="mono error-text">{truncate(LastError, 60)}</td>
-        <td class="actions-cell">
+        <td class="text-dim">{InsertedAgo}</td>
+        <td class="actions-cell" onclick="event.stopPropagation()">
             {action_buttons(JobState, RetryClick, CancelClick)}
         </td>
     </tr>
+    """
+    ).
+
+render_detail_row(Job, _Now) ->
+    IdBin = integer_to_binary(maps:get(id, Job)),
+    Args = fmt_json(maps:get(args, Job, ~"{}")),
+    Errors = format_errors(maps:get(errors, Job, [])),
+    Meta = fmt_json(maps:get(meta, Job, ~"{}")),
+    InsertedAt = fmt_timestamp(maps:get(inserted_at, Job, undefined)),
+    AttemptedAt = fmt_timestamp(maps:get(attempted_at, Job, undefined)),
+    CompletedAt = fmt_timestamp(maps:get(completed_at, Job, undefined)),
+    ScheduledAt = fmt_timestamp(maps:get(scheduled_at, Job, undefined)),
+    Progress = maps:get(progress, Job, 0),
+    ProgressBin = integer_to_binary(Progress),
+    Tags = fmt_tags(maps:get(tags, Job, [])),
+    ToggleClick =
+        <<"arizona.pushEventTo('jobs_view', 'toggle_detail', JSON.parse('{\"job_id\": \"",
+            IdBin/binary, "\"}'))">>,
+    arizona_template:from_html(
+        ~"""
+    <tr class="detail-row" onclick="{ToggleClick}">
+        <td colspan="8">
+            <div class="detail-grid">
+                <div class="detail-section">
+                    <div class="detail-label">Args</div>
+                    <pre class="detail-pre">{Args}</pre>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-label">Timestamps</div>
+                    <div class="detail-kv">
+                        <span class="detail-key">Inserted:</span> <span>{InsertedAt}</span>
+                    </div>
+                    <div class="detail-kv">
+                        <span class="detail-key">Scheduled:</span> <span>{ScheduledAt}</span>
+                    </div>
+                    <div class="detail-kv">
+                        <span class="detail-key">Attempted:</span> <span>{AttemptedAt}</span>
+                    </div>
+                    <div class="detail-kv">
+                        <span class="detail-key">Completed:</span> <span>{CompletedAt}</span>
+                    </div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-label">Meta</div>
+                    <div class="detail-kv">
+                        <span class="detail-key">Progress:</span>
+                        <span>{ProgressBin}%</span>
+                    </div>
+                    <div class="detail-kv">
+                        <span class="detail-key">Tags:</span>
+                        <span>{Tags}</span>
+                    </div>
+                    <pre class="detail-pre">{Meta}</pre>
+                </div>
+                {render_errors_section(Errors)}
+            </div>
+        </td>
+    </tr>
+    """
+    ).
+
+render_errors_section([]) ->
+    ~"";
+render_errors_section(Errors) ->
+    arizona_template:from_html(
+        ~"""
+    <div class="detail-section detail-section-full">
+        <div class="detail-label">Error History ({integer_to_binary(length(Errors))})</div>
+        {arizona_template:render_list(fun render_error_entry/1, Errors)}
+    </div>
+    """
+    ).
+
+render_error_entry(ErrMap) ->
+    AttemptBin = fmt_bin(maps:get(~"attempt", ErrMap, maps:get(attempt, ErrMap, ~"?"))),
+    ErrorMsg = fmt_bin(maps:get(~"error", ErrMap, maps:get(error, ErrMap, ~"unknown"))),
+    arizona_template:from_html(
+        ~"""
+    <div class="error-entry">
+        <span class="error-attempt">Attempt {AttemptBin}</span>
+        <pre class="detail-pre error-msg">{ErrorMsg}</pre>
+    </div>
+    """
+    ).
+
+render_pagination(Page, HasNext, PrevClick, NextClick) ->
+    arizona_template:from_html(
+        ~"""
+    <div class="pagination">
+        {prev_button(Page, PrevClick)}
+        <span class="page-info">Page {integer_to_binary(Page)}</span>
+        {next_button(HasNext, NextClick)}
+    </div>
+    """
+    ).
+
+prev_button(1, _Click) ->
+    arizona_template:from_html(
+        ~"""
+    <button class="btn btn-sm" disabled>Previous</button>
+    """
+    );
+prev_button(_Page, Click) ->
+    arizona_template:from_html(
+        ~"""
+    <button class="btn btn-sm" onclick="{Click}">Previous</button>
+    """
+    ).
+
+next_button(false, _Click) ->
+    arizona_template:from_html(
+        ~"""
+    <button class="btn btn-sm" disabled>Next</button>
+    """
+    );
+next_button(true, Click) ->
+    arizona_template:from_html(
+        ~"""
+    <button class="btn btn-sm" onclick="{Click}">Next</button>
     """
     ).
 
@@ -237,33 +420,108 @@ action_buttons(~"executing", _RetryClick, CancelClick) ->
 action_buttons(_, _, _) ->
     ~"".
 
-extract_last_error(Errors) when is_binary(Errors) ->
+%%----------------------------------------------------------------------
+%% Formatting
+%%----------------------------------------------------------------------
+
+time_ago(undefined, _Now) ->
+    ~"-";
+time_ago(null, _Now) ->
+    ~"-";
+time_ago(Timestamp, Now) ->
     try
-        case json:decode(Errors) of
-            List when is_list(List), length(List) > 0 ->
-                Last = lists:last(List),
-                maps:get(~"error", Last, ~"");
-            _ ->
-                ~""
+        Seconds =
+            calendar:datetime_to_gregorian_seconds(Now) -
+                calendar:datetime_to_gregorian_seconds(to_datetime(Timestamp)),
+        format_duration(Seconds)
+    catch
+        _:_ -> ~"-"
+    end.
+
+to_datetime({{_, _, _}, {_, _, _}} = DT) ->
+    DT;
+to_datetime(Bin) when is_binary(Bin) ->
+    %% Try parsing ISO 8601 from binary
+    case binary:split(Bin, [~"T", ~" "]) of
+        [DateBin, TimeBin] ->
+            [Y, Mo, D] = [binary_to_integer(P) || P <- binary:split(DateBin, ~"-", [global])],
+            TimeClean = hd(binary:split(TimeBin, [~"+", ~"Z"])),
+            [H, Mi | Rest] = binary:split(TimeClean, ~":", [global]),
+            S =
+                case Rest of
+                    [SBin] -> binary_to_integer(hd(binary:split(SBin, ~".")));
+                    [] -> 0
+                end,
+            {{Y, Mo, D}, {binary_to_integer(H), binary_to_integer(Mi), S}};
+        _ ->
+            erlang:universaltime()
+    end;
+to_datetime(_) ->
+    erlang:universaltime().
+
+format_duration(S) when S < 0 -> ~"just now";
+format_duration(S) when S < 60 -> <<(integer_to_binary(S))/binary, "s ago">>;
+format_duration(S) when S < 3600 -> <<(integer_to_binary(S div 60))/binary, "m ago">>;
+format_duration(S) when S < 86400 -> <<(integer_to_binary(S div 3600))/binary, "h ago">>;
+format_duration(S) -> <<(integer_to_binary(S div 86400))/binary, "d ago">>.
+
+fmt_timestamp(undefined) ->
+    ~"-";
+fmt_timestamp(null) ->
+    ~"-";
+fmt_timestamp({{Y, Mo, D}, {H, Mi, S}}) ->
+    iolist_to_binary(
+        io_lib:format(~"~4..0B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B", [Y, Mo, D, H, Mi, S])
+    );
+fmt_timestamp(V) when is_binary(V) -> V;
+fmt_timestamp(_) ->
+    ~"-".
+
+fmt_json(V) when is_binary(V) ->
+    try
+        Decoded = json:decode(V),
+        iolist_to_binary(json:encode(Decoded, #{indent => 2}))
+    catch
+        _:_ -> V
+    end;
+fmt_json(V) when is_map(V) ->
+    try
+        iolist_to_binary(json:encode(V, #{indent => 2}))
+    catch
+        _:_ -> ~"{}"
+    end;
+fmt_json(_) ->
+    ~"{}".
+
+fmt_tags([]) ->
+    ~"none";
+fmt_tags(Tags) when is_list(Tags) ->
+    iolist_to_binary(lists:join(~", ", [fmt_bin(T) || T <- Tags]));
+fmt_tags(V) when is_binary(V) ->
+    try
+        case json:decode(V) of
+            List when is_list(List) -> fmt_tags(List);
+            _ -> V
         end
     catch
-        _:_ -> ~""
+        _:_ -> V
     end;
-extract_last_error(Errors) when is_list(Errors), length(Errors) > 0 ->
-    Last = lists:last(Errors),
-    case is_map(Last) of
-        true -> fmt_bin(maps:get(~"error", Last, maps:get(error, Last, ~"")));
-        false -> ~""
-    end;
-extract_last_error(_) ->
-    ~"".
+fmt_tags(_) ->
+    ~"none".
 
-truncate(<<>>, _) ->
-    ~"";
-truncate(Bin, Max) when byte_size(Bin) > Max ->
-    <<(binary:part(Bin, 0, Max))/binary, "...">>;
-truncate(Bin, _Max) ->
-    Bin.
+format_errors(Errors) when is_binary(Errors) ->
+    try
+        case json:decode(Errors) of
+            List when is_list(List) -> List;
+            _ -> []
+        end
+    catch
+        _:_ -> []
+    end;
+format_errors(Errors) when is_list(Errors) ->
+    Errors;
+format_errors(_) ->
+    [].
 
 selected(Current, Value) when Current =:= Value -> ~"selected";
 selected(_, _) -> ~"".
@@ -278,4 +536,5 @@ state_badge(_) -> ~"".
 
 fmt_bin(V) when is_binary(V) -> V;
 fmt_bin(V) when is_atom(V) -> atom_to_binary(V);
+fmt_bin(V) when is_integer(V) -> integer_to_binary(V);
 fmt_bin(_) -> ~"".
