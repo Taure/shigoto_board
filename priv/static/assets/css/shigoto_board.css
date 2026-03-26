@@ -101,3 +101,32 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
 
 /* Actions cell */
 .actions-cell { white-space: nowrap; display: flex; gap: 0.25rem; }
+
+/* Dim text for timestamps */
+.text-dim { color: var(--fg-dim); font-size: 0.8rem; }
+
+/* Clickable job rows */
+.job-row { cursor: pointer; }
+.job-row:hover { background: rgba(59,130,246,0.05) !important; }
+.expand-col { color: var(--fg-dim); font-size: 0.6rem; width: 1.5rem; }
+
+/* Job detail row */
+.detail-row { background: rgba(15,23,42,0.5); }
+.detail-row td { padding: 0; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; padding: 1rem 1.5rem; }
+.detail-section { min-width: 0; }
+.detail-section-full { grid-column: 1 / -1; }
+.detail-label { font-size: 0.7rem; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; font-weight: 600; }
+.detail-kv { font-size: 0.8rem; margin-bottom: 0.25rem; }
+.detail-key { color: var(--fg-dim); }
+.detail-pre { background: var(--bg); border: 1px solid var(--border); border-radius: 0.25rem; padding: 0.5rem; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.75rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; margin-top: 0.25rem; }
+
+/* Error history */
+.error-entry { margin-bottom: 0.75rem; }
+.error-attempt { font-size: 0.7rem; color: var(--red); font-weight: 600; text-transform: uppercase; }
+.error-msg { color: var(--red); }
+
+/* Pagination */
+.pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); margin-top: 0.5rem; }
+.page-info { font-size: 0.8rem; color: var(--fg-dim); }
+.btn:disabled, .btn[disabled] { opacity: 0.3; cursor: not-allowed; }
