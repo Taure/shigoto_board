@@ -10,11 +10,11 @@ index(CowboyReq) ->
     try
         View = arizona_view:call_mount_callback(ViewModule, MountArg, ArizonaReq),
         {Html, _RenderView} = arizona_renderer:render_layout(View),
-        {status, 200, #{<<"content-type">> => <<"text/html; charset=utf-8">>}, Html}
+        {status, 200, #{~"content-type" => ~"text/html; charset=utf-8"}, Html}
     catch
         Error:Reason:Stacktrace ->
             logger:error(~"Shigoto board render error: ~p:~p~n~p", [Error, Reason, Stacktrace]),
-            {status, 500, #{<<"content-type">> => <<"text/html">>}, <<"Internal Server Error">>}
+            {status, 500, #{~"content-type" => ~"text/html"}, ~"Internal Server Error"}
     end.
 
 -spec resolve_view(map()) -> {view, module(), term(), list()}.
@@ -24,23 +24,23 @@ resolve_view(#{path := Path}) ->
 
 resolve_view_module(Path) ->
     case page_from_path(Path) of
-        <<"queues">> -> {shigoto_board_queues_view, undefined};
-        <<"workers">> -> {shigoto_board_workers_view, undefined};
-        <<"jobs">> -> {shigoto_board_jobs_view, undefined};
-        <<"batches">> -> {shigoto_board_batches_view, undefined};
-        <<"cron">> -> {shigoto_board_cron_view, undefined};
+        ~"queues" -> {shigoto_board_queues_view, undefined};
+        ~"workers" -> {shigoto_board_workers_view, undefined};
+        ~"jobs" -> {shigoto_board_jobs_view, undefined};
+        ~"batches" -> {shigoto_board_batches_view, undefined};
+        ~"cron" -> {shigoto_board_cron_view, undefined};
         _ -> {shigoto_board_overview_view, undefined}
     end.
 
 page_from_path(Path) ->
-    Pages = [<<"queues">>, <<"workers">>, <<"jobs">>, <<"batches">>, <<"cron">>],
-    case binary:split(Path, <<"/">>, [global, trim_all]) of
+    Pages = [~"queues", ~"workers", ~"jobs", ~"batches", ~"cron"],
+    case binary:split(Path, ~"/", [global, trim_all]) of
         [] ->
-            <<"overview">>;
+            ~"overview";
         Parts ->
             Last = lists:last(Parts),
             case lists:member(Last, Pages) of
                 true -> Last;
-                false -> <<"overview">>
+                false -> ~"overview"
             end
     end.

@@ -41,13 +41,13 @@ render(Bindings) ->
     FilterWorker = arizona_template:get_binding(filter_worker, Bindings),
     Expanded = arizona_template:get_binding(expanded, Bindings),
     StateChange =
-        <<"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"state\": \"' + this.value + '\"}'))">>,
+        ~"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"state\": \"' + this.value + '\"}'))",
     QueueChange =
-        <<"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"queue\": \"' + this.value + '\"}'))">>,
+        ~"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"queue\": \"' + this.value + '\"}'))",
     WorkerChange =
-        <<"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"worker\": \"' + this.value + '\"}'))">>,
-    PrevClick = <<"arizona.pushEventTo('jobs_view', 'page', JSON.parse('{\"dir\": \"prev\"}'))">>,
-    NextClick = <<"arizona.pushEventTo('jobs_view', 'page', JSON.parse('{\"dir\": \"next\"}'))">>,
+        ~"arizona.pushEventTo('jobs_view', 'filter', JSON.parse('{\"worker\": \"' + this.value + '\"}'))",
+    PrevClick = ~"arizona.pushEventTo('jobs_view', 'page', JSON.parse('{\"dir\": \"prev\"}'))",
+    NextClick = ~"arizona.pushEventTo('jobs_view', 'page', JSON.parse('{\"dir\": \"next\"}'))",
     HasNext = length(Jobs) =:= ?PAGE_SIZE,
     arizona_template:from_html(
         ~"""
@@ -480,13 +480,13 @@ fmt_timestamp(_) ->
 fmt_json(V) when is_binary(V) ->
     try
         Decoded = json:decode(V),
-        iolist_to_binary(json:encode(Decoded, #{indent => 2}))
+        iolist_to_binary(json:encode(Decoded, eqwalizer:fix_me(#{indent => 2})))
     catch
         _:_ -> V
     end;
 fmt_json(V) when is_map(V) ->
     try
-        iolist_to_binary(json:encode(V, #{indent => 2}))
+        iolist_to_binary(json:encode(V, eqwalizer:fix_me(#{indent => 2})))
     catch
         _:_ -> ~"{}"
     end;
