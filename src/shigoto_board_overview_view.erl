@@ -12,12 +12,14 @@ mount(_Arg, _Req) ->
     {ok, Counts} = shigoto_dashboard:job_counts(),
     {ok, Queues} = shigoto_dashboard:queue_stats(),
     {ok, Workers} = shigoto_dashboard:worker_stats(),
+    {ok, Stale} = shigoto_dashboard:stale_jobs(),
     Prefix = shigoto_board:prefix(),
     Bindings = #{
         id => ~"overview_view",
         counts => Counts,
         queues => Queues,
-        workers => Workers
+        workers => Workers,
+        stale_count => length(Stale)
     },
     Layout =
         {shigoto_board_layout, render, main_content, #{
@@ -32,10 +34,13 @@ render(Bindings) ->
     Counts = arizona_template:get_binding(counts, Bindings),
     Queues = arizona_template:get_binding(queues, Bindings),
     Workers = arizona_template:get_binding(workers, Bindings),
+    StaleCount = arizona_template:get_binding(stale_count, Bindings),
     arizona_template:from_html(
         ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <p class="refresh-info">Auto-refreshes every 2s</p>
+
+        {stale_alert(StaleCount)}
 
         <div class="stat-grid">
             {stat_card(~"Available", ~"text-blue", maps:get(available, Counts, 0))}
@@ -85,11 +90,13 @@ handle_info(refresh, View) ->
     {ok, Counts} = shigoto_dashboard:job_counts(),
     {ok, Queues} = shigoto_dashboard:queue_stats(),
     {ok, Workers} = shigoto_dashboard:worker_stats(),
+    {ok, Stale} = shigoto_dashboard:stale_jobs(),
     State = arizona_view:get_state(View),
     S1 = arizona_stateful:put_binding(counts, Counts, State),
     S2 = arizona_stateful:put_binding(queues, Queues, S1),
     S3 = arizona_stateful:put_binding(workers, Workers, S2),
-    {[], arizona_view:update_state(S3, View)}.
+    S4 = arizona_stateful:put_binding(stale_count, length(Stale), S3),
+    {[], arizona_view:update_state(S4, View)}.
 
 %%----------------------------------------------------------------------
 %% Row renderers
@@ -123,6 +130,18 @@ render_worker_row(W) ->
 %%----------------------------------------------------------------------
 %% Helpers
 %%----------------------------------------------------------------------
+
+stale_alert(0) ->
+    ~"";
+stale_alert(Count) ->
+    Msg = <<
+        (integer_to_binary(Count))/binary, " stale job(s) detected - possible zombie processes"
+    >>,
+    arizona_template:from_html(
+        ~"""
+    <div class="alert alert-red">{Msg}</div>
+    """
+    ).
 
 stat_card(Label, ColorClass, Value) ->
     arizona_template:from_html(

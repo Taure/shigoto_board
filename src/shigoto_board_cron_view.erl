@@ -41,12 +41,16 @@ render_with_entries(Bindings, Entries) ->
         ~"""
     <div id="{arizona_template:get_binding(id, Bindings)}">
         <div class="card">
-            <div class="card-title">Cron Entries</div>
+            <div class="card-title">
+                Cron Entries
+                <span class="badge badge-blue">{integer_to_binary(length(Entries))}</span>
+            </div>
             <table>
                 <thead><tr>
                     <th>Name</th>
                     <th>Schedule</th>
                     <th>Worker</th>
+                    <th>Queue</th>
                 </tr></thead>
                 <tbody>
                     {arizona_template:render_list(fun render_cron_row/1, Entries)}
@@ -62,12 +66,14 @@ render_with_entries(Bindings, Entries) ->
 %%----------------------------------------------------------------------
 
 render_cron_row({Name, Schedule, Worker, _Args}) ->
+    Queue = worker_queue(Worker),
     arizona_template:from_html(
         ~"""
     <tr>
         <td>{fmt(Name)}</td>
-        <td class="mono">{Schedule}</td>
+        <td class="mono">{fmt(Schedule)}</td>
         <td class="mono">{atom_to_binary(Worker)}</td>
+        <td>{Queue}</td>
     </tr>
     """
     ).
@@ -75,6 +81,16 @@ render_cron_row({Name, Schedule, Worker, _Args}) ->
 %%----------------------------------------------------------------------
 %% Helpers
 %%----------------------------------------------------------------------
+
+worker_queue(Worker) when is_atom(Worker) ->
+    try Worker:queue() of
+        Q when is_binary(Q) -> Q;
+        _ -> ~"default"
+    catch
+        _:_ -> ~"default"
+    end;
+worker_queue(_) ->
+    ~"default".
 
 fmt(V) when is_atom(V) -> atom_to_binary(V);
 fmt(V) when is_binary(V) -> V;
