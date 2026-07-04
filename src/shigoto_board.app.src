@@ -1,9 +1,14 @@
 {application, shigoto_board, [
-    {description, "Arizona live dashboard for Shigoto background jobs"},
+    {description, "Live dashboard for Shigoto background jobs (Nova + Datastar)"},
     {vsn, "git"},
     {registered, []},
     {mod, {shigoto_board_app, []}},
-    {applications, [kernel, stdlib, nova, arizona_core, arizona_nova, shigoto]},
-    {env, []},
-    {modules, []}
+    {applications, [kernel, stdlib, nova, datastar, shigoto]},
+    {env, [
+        {prefix, "/shigoto"},
+        {refresh_ms, 2000}
+    ]},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, [{"GitHub", "https://github.com/Taure/shigoto_board"}]}
 ]}.
