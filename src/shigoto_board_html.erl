@@ -634,8 +634,12 @@ page_qs(FilterQs, Page) ->
 qs_pair(_Key, ~"") -> [];
 qs_pair(Key, Value) -> [[Key, ~"=", uri_encode(Value)]].
 
+-spec uri_encode(binary()) -> binary().
 uri_encode(Bin) ->
-    list_to_binary(uri_string:quote(binary_to_list(Bin))).
+    case unicode:characters_to_binary(uri_string:quote(Bin)) of
+        B when is_binary(B) -> B;
+        _ -> Bin
+    end.
 
 %% ---------------------------------------------------------------------------
 %% small shared render helpers
@@ -694,10 +698,16 @@ td(Cls, Body) -> [~"<td class=\"", Cls, ~"\">", Body, ~"</td>"].
 %% formatting
 %% ---------------------------------------------------------------------------
 
+-spec fmt(term()) -> binary().
 fmt(N) when is_integer(N) -> integer_to_binary(N);
 fmt(V) when is_binary(V) -> V;
 fmt(V) when is_atom(V) -> atom_to_binary(V);
 fmt(V) -> iolist_to_binary(io_lib:format(~"~p", [V])).
+
+-spec join_bin(binary(), [binary()]) -> binary().
+join_bin(_Sep, []) -> ~"";
+join_bin(_Sep, [H]) -> H;
+join_bin(Sep, [H | T]) -> <<H/binary, Sep/binary, (join_bin(Sep, T))/binary>>.
 
 fmt_callback(null) -> ~"-";
 fmt_callback(V) when is_binary(V) -> V;
@@ -735,21 +745,31 @@ to_datetime({{_, _, _}, {_, _, _}} = DT) ->
     DT;
 to_datetime(Bin) when is_binary(Bin) ->
     case binary:split(Bin, [~"T", ~" "]) of
-        [DateBin, TimeBin] ->
+        [DateBin, TimeBin] when is_binary(DateBin), is_binary(TimeBin) ->
             [Y, Mo, D] = [binary_to_integer(Pt) || Pt <- binary:split(DateBin, ~"-", [global])],
-            TimeClean = hd(binary:split(TimeBin, [~"+", ~"Z"])),
-            [H, Mi | Rest] = binary:split(TimeClean, ~":", [global]),
-            S =
-                case Rest of
-                    [SBin] -> binary_to_integer(hd(binary:split(SBin, ~".")));
-                    [] -> 0
-                end,
-            {{Y, Mo, D}, {binary_to_integer(H), binary_to_integer(Mi), S}};
+            [H, Mi | Rest] = binary:split(strip_tz(TimeBin), ~":", [global]),
+            {{Y, Mo, D}, {binary_to_integer(H), binary_to_integer(Mi), secs(Rest)}};
         _ ->
             erlang:universaltime()
     end;
 to_datetime(_) ->
     erlang:universaltime().
+
+-spec strip_tz(binary()) -> binary().
+strip_tz(Bin) ->
+    case binary:split(Bin, [~"+", ~"Z"]) of
+        [Head | _] -> Head;
+        _ -> Bin
+    end.
+
+-spec secs([binary()]) -> integer().
+secs([SBin | _]) ->
+    case binary:split(SBin, ~".") of
+        [Whole | _] -> binary_to_integer(Whole);
+        _ -> 0
+    end;
+secs(_) ->
+    0.
 
 format_duration(S) when S < 0 -> ~"just now";
 format_duration(S) when S < 60 -> <<(integer_to_binary(S))/binary, " ago">>;
@@ -789,7 +809,7 @@ fmt_json(_) ->
 fmt_tags([]) ->
     ~"none";
 fmt_tags(Tags) when is_list(Tags) ->
-    iolist_to_binary(lists:join(~", ", [fmt(T) || T <- Tags]));
+    join_bin(~", ", [fmt(T) || T <- Tags]);
 fmt_tags(V) when is_binary(V) ->
     try
         case json:decode(V) of

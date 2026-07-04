@@ -73,7 +73,7 @@ page_inner(failures, _) ->
     shigoto_board_html:failures_html(ok_list(shigoto_dashboard:stale_jobs()));
 page_inner(cron, _) ->
     shigoto_board_html:cron_html(shigoto_config:cron_entries());
-page_inner(jobs, Filters) ->
+page_inner(jobs, Filters) when is_map(Filters) ->
     Jobs = ok_list(shigoto_dashboard:search_jobs(search_map(Filters))),
     shigoto_board_html:jobs_html(Jobs, Filters).
 
@@ -103,7 +103,7 @@ filters_from_qs(Qs) ->
     }.
 
 search_map(Filters) ->
-    Page = maps:get(page, Filters, 1),
+    Page = page_of(Filters),
     Base = #{limit => ?PAGE_SIZE, offset => (Page - 1) * ?PAGE_SIZE},
     with_filter(
         state,
@@ -127,14 +127,20 @@ qs_val(Key, Qs) ->
 
 qs_page(Qs) ->
     case proplists:get_value(~"page", Qs) of
-        undefined ->
-            1;
-        V ->
+        V when is_binary(V) ->
             try
                 max(1, binary_to_integer(V))
             catch
                 _:_ -> 1
-            end
+            end;
+        _ ->
+            1
+    end.
+
+page_of(Filters) ->
+    case maps:get(page, Filters, 1) of
+        P when is_integer(P), P > 0 -> P;
+        _ -> 1
     end.
 
 %% ---------------------------------------------------------------------------
@@ -153,16 +159,36 @@ jobs_stream_path(Filters) ->
 
 filters_to_qs(Filters) ->
     Pairs =
-        qs_pair(~"state", maps:get(filter_state, Filters, ~"")) ++
-            qs_pair(~"queue", maps:get(filter_queue, Filters, ~"")) ++
-            qs_pair(~"worker", maps:get(filter_worker, Filters, ~"")) ++
-            [[~"page=", integer_to_binary(maps:get(page, Filters, 1))]],
-    iolist_to_binary([~"?", lists:join(~"&", Pairs)]).
+        qs_pair(~"state", bin_field(filter_state, Filters)) ++
+            qs_pair(~"queue", bin_field(filter_queue, Filters)) ++
+            qs_pair(~"worker", bin_field(filter_worker, Filters)) ++
+            [<<"page=", (integer_to_binary(page_of(Filters)))/binary>>],
+    <<"?", (join_bin(~"&", Pairs))/binary>>.
 
+-spec join_bin(binary(), [binary()]) -> binary().
+join_bin(_Sep, []) -> ~"";
+join_bin(_Sep, [H]) -> H;
+join_bin(Sep, [H | T]) -> <<H/binary, Sep/binary, (join_bin(Sep, T))/binary>>.
+
+-spec qs_pair(binary(), binary()) -> [binary()].
 qs_pair(_Key, ~"") ->
     [];
 qs_pair(Key, Value) ->
-    [[Key, ~"=", list_to_binary(uri_string:quote(binary_to_list(Value)))]].
+    [<<Key/binary, "=", (uri_encode(Value))/binary>>].
+
+-spec uri_encode(binary()) -> binary().
+uri_encode(Bin) ->
+    case unicode:characters_to_binary(uri_string:quote(Bin)) of
+        B when is_binary(B) -> B;
+        _ -> Bin
+    end.
+
+-spec bin_field(atom(), map()) -> binary().
+bin_field(Key, Filters) ->
+    case maps:get(Key, Filters, ~"") of
+        V when is_binary(V) -> V;
+        _ -> ~""
+    end.
 
 ok_list({ok, L}) when is_list(L) -> L;
 ok_list(_) -> [].

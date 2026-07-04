@@ -24,10 +24,10 @@ resume_queue(Req) ->
     oneshot(shigoto_board_page_controller:page_inner(queues, undefined)).
 
 retry(Req) ->
-    job_action(Req, fun(Pool, Id) -> shigoto:retry(Pool, Id) end).
+    job_action(Req, fun shigoto:retry/2).
 
 cancel(Req) ->
-    job_action(Req, fun(Pool, Id) -> shigoto:cancel(Pool, Id) end).
+    job_action(Req, fun shigoto:cancel/2).
 
 %% ---------------------------------------------------------------------------
 %% internal

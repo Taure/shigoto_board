@@ -88,9 +88,9 @@ jobs_uses_qs_filters() ->
     ?assert(
         lists:any(
             fun
-                ({_, {_, search_jobs, [F]}, _}) ->
+                ({_, {_, search_jobs, [F]}, _}) when is_map(F) ->
                     maps:get(state, F, undefined) =:= ~"available" andalso
-                        maps:get(offset, F) =:= 25;
+                        maps:get(offset, F, undefined) =:= 25;
                 (_) ->
                     false
             end,
