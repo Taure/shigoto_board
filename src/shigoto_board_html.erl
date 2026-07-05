@@ -8,7 +8,7 @@ The `*_html/N` functions each render the *inner* of the `#page` live region;
 and live patches always agree. `page/3` wraps a region in the full shell.
 
 Interactivity is CSP-clean: filters are a plain GET form, pagination is plain
-links, and only mutations (pause/resume/retry/cancel) and row-expand use
+links, and only mutations (pause/resume/retry/cancel/redrive) and row-expand use
 Datastar `data-on-click` (the CSP allows `script-src 'self' 'unsafe-eval'` for
 Datastar's expression evaluation, but no inline `on*=` handlers).
 """.
@@ -22,7 +22,8 @@ Datastar's expression evaluation, but no inline `on*=` handlers).
     jobs_html/2,
     batches_html/1,
     cron_html/1,
-    failures_html/1
+    failures_html/1,
+    dlq_html/1
 ]).
 
 -define(PAGE_SIZE, 25).
@@ -34,7 +35,8 @@ Datastar's expression evaluation, but no inline `on*=` handlers).
     {~"jobs", ~"Jobs"},
     {~"batches", ~"Batches"},
     {~"cron", ~"Cron"},
-    {~"failures", ~"Failures"}
+    {~"failures", ~"Failures"},
+    {~"dlq", ~"Dead-Letter"}
 ]).
 
 %% ---------------------------------------------------------------------------
@@ -101,6 +103,7 @@ nav_item(P, Active, Page, Label) ->
     ].
 
 page_title(~"") -> ~"Overview";
+page_title(~"dlq") -> ~"Dead-Letter";
 page_title(Page) -> capitalise(Page).
 
 -spec csp_headers() -> map().
@@ -377,6 +380,81 @@ stale_row(J) ->
         {~"text-right", fmt(maps:get(attempt, J, 0))},
         {~"text-red", fmt_timestamp(maps:get(heartbeat_at, J, null))}
     ]).
+
+%% ---------------------------------------------------------------------------
+%% dead-letter (discarded jobs + redrive)
+%% ---------------------------------------------------------------------------
+
+dlq_html([]) ->
+    [refresh_info(), card(~"Dead-Letter", ~"<p class=\"empty\">No discarded jobs</p>")];
+dlq_html(Jobs) ->
+    P = shigoto_board:prefix(),
+    N = length(Jobs),
+    Title = [~"Dead-Letter ", count_badge(~"badge-red", N), ~" ", redrive_all_button(P)],
+    [
+        refresh_info(),
+        card(
+            Title,
+            table(
+                [~"ID", ~"Worker", ~"Queue", ~"Attempt", ~"Last Error", ~"Discarded", ~"Actions"],
+                [~"mono", ~"mono", ~"", ~"text-right", ~"", ~"text-dim", ~""],
+                [dlq_row(P, J) || J <- Jobs]
+            )
+        )
+    ].
+
+dlq_row(P, J) ->
+    IdBin = integer_to_binary(maps:get(id, J, 0)),
+    row([
+        {~"mono", IdBin},
+        {~"mono", esc(fmt(maps:get(worker, J, ~"unknown")))},
+        {~"", esc(fmt(maps:get(queue, J, ~"default")))},
+        {~"text-right", [
+            integer_to_binary(maps:get(attempt, J, 0)),
+            ~"/",
+            integer_to_binary(maps:get(max_attempts, J, 3))
+        ]},
+        {~"", last_error(maps:get(errors, J, []))},
+        {~"text-dim", fmt_timestamp(maps:get(discarded_at, J, undefined))},
+        {~"", redrive_button(P, IdBin)}
+    ]).
+
+redrive_button(P, IdBin) ->
+    [
+        ~"<button class=\"btn btn-sm btn-green\" data-on-click=\"@post('",
+        P,
+        ~"/dlq/",
+        IdBin,
+        ~"/redrive')\">Redrive</button>"
+    ].
+
+redrive_all_button(P) ->
+    [
+        ~"<button class=\"btn btn-sm btn-green\" data-on-click=\"@post('",
+        P,
+        ~"/dlq/redrive-all')\">Redrive all</button>"
+    ].
+
+last_error(Errors) ->
+    case format_errors(Errors) of
+        [] ->
+            ~"-";
+        List ->
+            Msg =
+                case lists:last(List) of
+                    E when is_map(E) ->
+                        fmt(maps:get(~"error", E, maps:get(error, E, ~"unknown")));
+                    _ ->
+                        ~"unknown"
+                end,
+            [~"<span class=\"mono error-msg\">", esc(truncate(Msg, 160)), ~"</span>"]
+    end.
+
+-spec truncate(binary(), pos_integer()) -> binary().
+truncate(Bin, Max) when byte_size(Bin) =< Max ->
+    Bin;
+truncate(Bin, Max) ->
+    <<(binary:part(Bin, 0, Max))/binary, (~"\x{2026}")/binary>>.
 
 %% ---------------------------------------------------------------------------
 %% jobs

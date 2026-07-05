@@ -17,6 +17,7 @@ live patches always agree. Cron is a static page (no stream).
     batches/1,
     cron/1,
     failures/1,
+    dlq/1,
     page_inner/2,
     page_atom/1,
     filters_from_qs/1
@@ -42,6 +43,9 @@ batches(_Req) ->
 
 failures(_Req) ->
     full(~"failures", stream_path(~"failures"), page_inner(failures, undefined)).
+
+dlq(_Req) ->
+    full(~"dlq", stream_path(~"dlq"), page_inner(dlq, undefined)).
 
 cron(_Req) ->
     %% Static page - cron entries are config, not runtime state.
@@ -71,6 +75,11 @@ page_inner(batches, _) ->
     shigoto_board_html:batches_html(ok_list(shigoto_dashboard:batch_stats()));
 page_inner(failures, _) ->
     shigoto_board_html:failures_html(ok_list(shigoto_dashboard:stale_jobs()));
+page_inner(dlq, _) ->
+    Discarded = ok_list(
+        shigoto_dashboard:search_jobs(#{state => ~"discarded", limit => ?PAGE_SIZE})
+    ),
+    shigoto_board_html:dlq_html(Discarded);
 page_inner(cron, _) ->
     shigoto_board_html:cron_html(shigoto_config:cron_entries());
 page_inner(jobs, Filters) when is_map(Filters) ->
@@ -86,6 +95,7 @@ page_atom(~"jobs") -> jobs;
 page_atom(~"batches") -> batches;
 page_atom(~"cron") -> cron;
 page_atom(~"failures") -> failures;
+page_atom(~"dlq") -> dlq;
 page_atom(_) -> overview.
 
 %% ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ routes(_Env) ->
                 {"/batches", fun shigoto_board_page_controller:batches/1, #{methods => [get]}},
                 {"/cron", fun shigoto_board_page_controller:cron/1, #{methods => [get]}},
                 {"/failures", fun shigoto_board_page_controller:failures/1, #{methods => [get]}},
+                {"/dlq", fun shigoto_board_page_controller:dlq/1, #{methods => [get]}},
                 {"/queues/:queue/pause", fun shigoto_board_action_controller:pause_queue/1, #{
                     methods => [post]
                 }},
@@ -30,6 +31,12 @@ routes(_Env) ->
                     methods => [post]
                 }},
                 {"/jobs/:id/cancel", fun shigoto_board_action_controller:cancel/1, #{
+                    methods => [post]
+                }},
+                {"/dlq/redrive-all", fun shigoto_board_action_controller:redrive_all/1, #{
+                    methods => [post]
+                }},
+                {"/dlq/:id/redrive", fun shigoto_board_action_controller:redrive/1, #{
                     methods => [post]
                 }},
                 {"/sse/:page", fun shigoto_board_sse:stream/1, #{methods => [get]}},

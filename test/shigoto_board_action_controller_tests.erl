@@ -9,7 +9,10 @@ action_test_() ->
         fun resume_calls_shigoto/0,
         fun retry_calls_shigoto_with_pool/0,
         fun cancel_calls_shigoto/0,
-        fun bad_job_id_is_rejected/0
+        fun bad_job_id_is_rejected/0,
+        fun redrive_retries_single_job/0,
+        fun redrive_all_retries_by_discarded_state/0,
+        fun redrive_bad_job_id_is_rejected/0
     ]}.
 
 setup() ->
@@ -19,6 +22,7 @@ setup() ->
     meck:expect(shigoto, resume_queue, 1, ok),
     meck:expect(shigoto, retry, 2, ok),
     meck:expect(shigoto, cancel, 2, ok),
+    meck:expect(shigoto, retry_by, 2, {ok, 0}),
     meck:new(shigoto_config, [non_strict]),
     meck:expect(shigoto_config, pool, 0, my_pool),
     meck:new(shigoto_dashboard, [non_strict]),
@@ -55,4 +59,20 @@ cancel_calls_shigoto() ->
 
 bad_job_id_is_rejected() ->
     ?assertEqual({status, 400}, ?M:retry(req(#{~"id" => ~"notanint"}, ~""))),
+    ?assertEqual(0, meck:num_calls(shigoto, retry, ['_', '_'])).
+
+redrive_retries_single_job() ->
+    {status, 200, _, _} = ?M:redrive(req(#{~"id" => ~"11"}, ~"")),
+    ?assertEqual(my_pool, meck:capture(first, shigoto, retry, ['_', '_'], 1)),
+    ?assertEqual(11, meck:capture(first, shigoto, retry, ['_', '_'], 2)).
+
+redrive_all_retries_by_discarded_state() ->
+    {status, 200, _, _} = ?M:redrive_all(req(#{}, ~"")),
+    ?assertEqual(my_pool, meck:capture(first, shigoto, retry_by, ['_', '_'], 1)),
+    ?assertEqual(
+        #{state => ~"discarded"}, meck:capture(first, shigoto, retry_by, ['_', '_'], 2)
+    ).
+
+redrive_bad_job_id_is_rejected() ->
+    ?assertEqual({status, 400}, ?M:redrive(req(#{~"id" => ~"nope"}, ~""))),
     ?assertEqual(0, meck:num_calls(shigoto, retry, ['_', '_'])).
