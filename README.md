@@ -40,6 +40,7 @@ Mount as a Nova app in `sys.config`:
 - **Batches** - Active batch monitoring
 - **Cron** - Configured cron entries
 - **Failures** - Stale (zombie) jobs with heartbeat detail
+- **Dead-Letter** - Discarded jobs with per-job and bulk redrive (retry)
 
 ## How it works
 
@@ -47,5 +48,5 @@ Each page server-renders a first-paint snapshot, then a `data-init` SSE stream
 (`/<prefix>/sse/:page`) repaints the `#page` region every `refresh_ms`. The
 jobs filter/page state rides as query params on the stream URL, so each viewer
 polls exactly the slice they are looking at. Mutations (pause/resume, retry,
-cancel) post back and return a one-shot Datastar patch. `datastar.js` is served
+cancel, redrive) post back and return a one-shot Datastar patch. `datastar.js` is served
 self-hosted under `/<prefix>/assets/js/` behind a strict same-origin CSP.

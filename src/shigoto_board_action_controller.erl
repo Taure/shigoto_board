@@ -1,7 +1,7 @@
 -module(shigoto_board_action_controller).
 -moduledoc """
 POST handlers for the board's controls (pause/resume a queue, retry/cancel a
-job).
+job, redrive discarded jobs).
 
 Each mutates Shigoto and returns a one-shot Datastar response: a normal
 `{status, 200, ...}` reply whose body is an SSE-framed patch of the `#page`
@@ -11,7 +11,7 @@ job actions carry the current filter/page as query params so the repaint shows
 the same slice the user was looking at.
 """.
 
--export([pause_queue/1, resume_queue/1, retry/1, cancel/1]).
+-export([pause_queue/1, resume_queue/1, retry/1, cancel/1, redrive/1, redrive_all/1]).
 
 pause_queue(Req) ->
     Queue = binding(~"queue", Req),
@@ -28,6 +28,19 @@ retry(Req) ->
 
 cancel(Req) ->
     job_action(Req, fun shigoto:cancel/2).
+
+redrive(Req) ->
+    case job_id(Req) of
+        {ok, Id} ->
+            _ = shigoto:retry(shigoto_config:pool(), Id),
+            oneshot(shigoto_board_page_controller:page_inner(dlq, undefined));
+        error ->
+            {status, 400}
+    end.
+
+redrive_all(_Req) ->
+    _ = shigoto:retry_by(shigoto_config:pool(), #{state => ~"discarded"}),
+    oneshot(shigoto_board_page_controller:page_inner(dlq, undefined)).
 
 %% ---------------------------------------------------------------------------
 %% internal

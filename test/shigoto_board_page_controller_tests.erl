@@ -28,7 +28,8 @@ page_atom_maps_known_pages_test() ->
     ?assertEqual(overview, ?M:page_atom(~"overview")),
     ?assertEqual(queues, ?M:page_atom(~"queues")),
     ?assertEqual(jobs, ?M:page_atom(~"jobs")),
-    ?assertEqual(failures, ?M:page_atom(~"failures")).
+    ?assertEqual(failures, ?M:page_atom(~"failures")),
+    ?assertEqual(dlq, ?M:page_atom(~"dlq")).
 
 page_atom_unknown_defaults_overview_test() ->
     ?assertEqual(overview, ?M:page_atom(~"bogus")).
@@ -41,7 +42,8 @@ controller_test_() ->
     {foreach, fun setup/0, fun cleanup/1, [
         fun index_returns_full_page/0,
         fun jobs_uses_qs_filters/0,
-        fun page_inner_survives_dashboard_error/0
+        fun page_inner_survives_dashboard_error/0,
+        fun dlq_queries_discarded_state/0
     ]}.
 
 setup() ->
@@ -102,3 +104,18 @@ page_inner_survives_dashboard_error() ->
     meck:expect(shigoto_dashboard, queue_stats, 0, {error, no_connection}),
     Inner = iolist_to_binary(?M:page_inner(queues, undefined)),
     ?assert(binary:match(Inner, ~"Queues") =/= nomatch).
+
+dlq_queries_discarded_state() ->
+    _ = iolist_to_binary(?M:page_inner(dlq, undefined)),
+    History = meck:history(shigoto_dashboard),
+    ?assert(
+        lists:any(
+            fun
+                ({_, {_, search_jobs, [F]}, _}) when is_map(F) ->
+                    maps:get(state, F, undefined) =:= ~"discarded";
+                (_) ->
+                    false
+            end,
+            History
+        )
+    ).

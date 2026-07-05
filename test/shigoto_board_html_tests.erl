@@ -59,6 +59,19 @@ batches() ->
         }
     ].
 
+discarded() ->
+    [
+        #{
+            id => 11,
+            worker => ~"my_worker",
+            queue => ~"default",
+            attempt => 3,
+            max_attempts => 3,
+            discarded_at => {{2026, 7, 4}, {8, 0, 0}},
+            errors => [#{~"attempt" => 3, ~"error" => ~"kaboom"}]
+        }
+    ].
+
 stale() ->
     [
         #{
@@ -140,6 +153,35 @@ failures_render_test() ->
     B = render(shigoto_board_html:failures_html(stale())),
     ?assert(has(B, ~"Stale Jobs")),
     ?assert(has(B, ~"2026-07-04 09:00:00")).
+
+dlq_render_rows_and_redrive_test() ->
+    B = render(shigoto_board_html:dlq_html(discarded())),
+    ?assert(has(B, ~"Dead-Letter")),
+    ?assert(has(B, ~"/dlq/11/redrive")),
+    ?assert(has(B, ~"/dlq/redrive-all")),
+    ?assert(has(B, ~"data-on-click")),
+    ?assert(has(B, ~"kaboom")),
+    ?assert(has(B, ~"2026-07-04 08:00:00")).
+
+dlq_empty_state_test() ->
+    B = render(shigoto_board_html:dlq_html([])),
+    ?assert(has(B, ~"No discarded jobs")),
+    ?assertNot(has(B, ~"redrive-all")).
+
+dlq_truncates_long_error_test() ->
+    Long = binary:copy(~"x", 200),
+    Job = #{
+        id => 11,
+        worker => ~"my_worker",
+        queue => ~"default",
+        attempt => 3,
+        max_attempts => 3,
+        discarded_at => {{2026, 7, 4}, {8, 0, 0}},
+        errors => [#{~"attempt" => 3, ~"error" => Long}]
+    },
+    B = render(shigoto_board_html:dlq_html([Job])),
+    ?assert(has(B, ~"\x{2026}")),
+    ?assertNot(has(B, binary:copy(~"x", 200))).
 
 page_shell_wraps_region_test() ->
     B = render(shigoto_board_html:page(~"queues", ~"/shigoto/sse/queues", ~"<p>x</p>")),
